@@ -8,6 +8,10 @@ data:
   num_classes: 200
   batch_size: 64
   num_workers: 4
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 2
+  non_blocking: true
 model:
   base_channels: 104
   channel_mults: [1, 2, 3, 4]
@@ -29,6 +33,20 @@ train:
   ema_decay: 0.9999
   dtype: bf16
   log_every: 50
-  save_every: 2000
-  sample_every: 2000
+  save_every: 5000
+  sample_every: 5000
   sample_count: 16
+sampling:
+  preview_sampler: ddim
+  preview_steps: 50
+  preview_seed: 123
+  guidance_scale: 1.5
+  diagnostics: true
+performance:
+  scalar_log_every: 50
+  ema_foreach: true
+  fused_adamw: true
+  cudnn_benchmark: true
+  channels_last: false
+  attention_backend: manual
+  compile_mode: none
