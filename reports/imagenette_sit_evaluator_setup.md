@@ -70,6 +70,19 @@ REPA 150k, fixed 200-sample protocol, CFG 1.5:
 
 EMA slightly improved class accuracy and precision in this limited run. Heun-50 did not provide a material metric improvement over Heun-25, while sampling took about 70% longer. This does not support attributing the visible smoothing solely to EMA or to the 25-step Heun preview.
 
+## Follow-Up Fixed Evaluation: REPA 200k And 350k
+
+Protocol: the same 200 class-balanced samples and seeds as quick evaluation, CFG 1.5, Heun-50, Imagenette validation reference. Checkpoint 365k was intentionally excluded.
+
+| Step | Weights | KID | FID | ResNet target accuracy | Precision | Recall |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 200k | raw | 0.07737 | 226.06 | 19.0% | 20.0% | 67.3% |
+| 200k | EMA | 0.06988 | 221.01 | 21.5% | 19.0% | 68.5% |
+| 350k | raw | 0.06133 | 207.37 | 23.5% | 20.0% | 77.7% |
+| 350k | EMA | 0.05574 | 193.36 | 28.0% | 23.0% | 88.1% |
+
+Conclusion: unlike the short 20k tiny-overfit run, EMA is beneficial for this long REPA run. The blurred quality of periodic REPA previews is not explained by EMA alone. REPA 350k EMA is the selected provisional checkpoint for visual and metric comparisons, pending an equal-step non-REPA baseline.
+
 ## VAE Reconstruction Ceiling
 
 Imagenette validation images were encoded and decoded with frozen `stabilityai/sd-vae-ft-mse` using scaling factor `0.18215`, then evaluated against the original validation distribution.
@@ -104,6 +117,8 @@ The raw fixed grid contains recognisable trucks across diverse colors and viewpo
 .venv\Scripts\python.exe mini_diffusion\train_sit.py --config mini_diffusion\configs\imagenette_sit_s_128_tiny_overfit.yaml --resume outputs\imagenette_sit_s_128_tiny_overfit\checkpoints\latest.pt
 .venv\Scripts\python.exe mini_diffusion\evaluate_tiny_overfit.py --checkpoint outputs\imagenette_sit_s_128_tiny_overfit\checkpoints\latest.pt --output evaluation\imagenette_sit_tiny_overfit\raw_heun50 --reference-cache evaluation\imagenette_sit_tiny_overfit\reference --class-id 6 --samples 64 --seed-start 3000 --steps 50 --guidance-scale 1.5 --weights raw
 .venv\Scripts\python.exe mini_diffusion\evaluate_tiny_overfit.py --checkpoint outputs\imagenette_sit_s_128_tiny_overfit\checkpoints\latest.pt --output evaluation\imagenette_sit_tiny_overfit\ema_heun50 --reference-cache evaluation\imagenette_sit_tiny_overfit\reference --class-id 6 --samples 64 --seed-start 3000 --steps 50 --guidance-scale 1.5 --weights ema
+.venv\Scripts\python.exe mini_diffusion\evaluate_sit.py --checkpoints outputs\imagenette_sit_s_128_repa\checkpoints\step_0200000.pt outputs\imagenette_sit_s_128_repa\checkpoints\step_0350000.pt --output evaluation\imagenette_sit_repa_raw_heun50 --reference-cache evaluation\imagenette_sit_quick\reference --mode quick --weights raw --sampler heun --steps 50 --guidance-scale 1.5 --samples-per-class 20 --seed-start 1000 --reference-split val --sample-batch-size 20
+.venv\Scripts\python.exe mini_diffusion\evaluate_sit.py --checkpoints outputs\imagenette_sit_s_128_repa\checkpoints\step_0200000.pt outputs\imagenette_sit_s_128_repa\checkpoints\step_0350000.pt --output evaluation\imagenette_sit_repa_ema_heun50 --reference-cache evaluation\imagenette_sit_quick\reference --mode quick --weights ema --sampler heun --steps 50 --guidance-scale 1.5 --samples-per-class 20 --seed-start 1000 --reference-split val --sample-batch-size 20
 ```
 
 Future equal-step comparison command, once the frozen baseline 150k checkpoint exists:
