@@ -54,6 +54,17 @@ def test_sit_checkpoint_roundtrip_and_resume(tmp_path) -> None:
     assert all(torch.equal(a, b) for a, b in zip(model.parameters(), restored.parameters()))
 
 
+def test_foreach_ema_updates() -> None:
+    model = tiny_sit()
+    ema = EMA(model, decay=0.5, foreach=True)
+    before = {name: value.clone() for name, value in ema.shadow.items()}
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.add_(1.0)
+    ema.update(model)
+    assert any(not torch.equal(before[name], value) for name, value in ema.shadow.items())
+
+
 def test_one_batch_overfit_velocity() -> None:
     torch.manual_seed(0); model = SiT(input_size=16, hidden_size=48, depth=2, num_heads=6, mlp_ratio=2.0, cond_drop_prob=0.0); optimizer = torch.optim.AdamW(model.parameters(), lr=3e-3)
     x0, noise, labels, t = torch.randn(4, 4, 16, 16), torch.randn(4, 4, 16, 16), torch.tensor([0, 1, 2, 3]), torch.tensor([0.2, 0.4, 0.6, 0.8]); xt, target = linear_interpolant(x0, noise, t); losses = []

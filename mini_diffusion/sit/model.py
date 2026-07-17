@@ -25,7 +25,12 @@ class SiTBlock(nn.Module):
     def __init__(self, hidden_size: int, num_heads: int, mlp_ratio: float) -> None:
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
-        self.attn = nn.MultiheadAttention(hidden_size, num_heads, batch_first=True)
+        if hidden_size % num_heads:
+            raise ValueError("hidden_size must be divisible by num_heads")
+        self.num_heads = num_heads
+        self.head_dim = hidden_size // num_heads
+        self.qkv = nn.Linear(hidden_size, 3 * hidden_size)
+        self.proj = nn.Linear(hidden_size, hidden_size)
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.mlp = nn.Sequential(
             nn.Linear(hidden_size, int(hidden_size * mlp_ratio)),
@@ -37,8 +42,12 @@ class SiTBlock(nn.Module):
     def forward(self, x: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=1)
         attn_input = modulate(self.norm1(x), shift_msa, scale_msa)
-        # MultiheadAttention dispatches to PyTorch SDPA where available.
-        x = x + gate_msa[:, None] * self.attn(attn_input, attn_input, attn_input, need_weights=False)[0]
+        batch, tokens, channels = attn_input.shape
+        qkv = self.qkv(attn_input).reshape(batch, tokens, 3, self.num_heads, self.head_dim)
+        query, key, value = qkv.permute(2, 0, 3, 1, 4)
+        attention = F.scaled_dot_product_attention(query, key, value, dropout_p=0.0, is_causal=False)
+        attention = attention.transpose(1, 2).reshape(batch, tokens, channels)
+        x = x + gate_msa[:, None] * self.proj(attention)
         x = x + gate_mlp[:, None] * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 

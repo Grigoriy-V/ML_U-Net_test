@@ -42,7 +42,13 @@ def build_optimizer(model: nn.Module, cfg: dict) -> torch.optim.Optimizer:
         kwargs.pop("fused", None); print("warning: fused AdamW unavailable; using AdamW"); return torch.optim.AdamW(model.parameters(), **kwargs)
 def make_loader(cfg: dict) -> tuple[DataLoader, dict]:
     payload = load_cache(Path(cfg["data"]["cache_dir"]) / "train.pt", expected_resolution=cfg["data"]["resolution"], expected_vae_model_id=cfg["vae"]["model_id"])
-    loader = DataLoader(TensorDataset(payload["latents"], payload["labels"]), batch_size=cfg["data"]["batch_size"], shuffle=True, drop_last=True, num_workers=cfg["data"].get("num_workers", 0), pin_memory=torch.cuda.is_available())
+    workers = int(cfg["data"].get("num_workers", 0))
+    loader_kwargs = {"batch_size": cfg["data"]["batch_size"], "shuffle": True, "drop_last": True,
+                     "num_workers": workers, "pin_memory": bool(cfg["data"].get("pin_memory", torch.cuda.is_available()))}
+    if workers > 0:
+        loader_kwargs["persistent_workers"] = bool(cfg["data"].get("persistent_workers", False))
+        loader_kwargs["prefetch_factor"] = int(cfg["data"].get("prefetch_factor", 2))
+    loader = DataLoader(TensorDataset(payload["latents"], payload["labels"]), **loader_kwargs)
     return loader, payload
 def infinite(loader):
     while True: yield from loader
@@ -85,7 +91,7 @@ def main() -> None:
     while step < max_steps:
         optimizer.zero_grad(set_to_none=True); total = 0.0
         for _ in range(accum):
-            x0, labels = next(batches); x0, labels = x0.to(device, non_blocking=True).float(), labels.to(device, non_blocking=True); noise = torch.randn_like(x0); t = torch.rand(x0.shape[0], device=device); xt, target = linear_interpolant(x0, noise, t)
+            x0, labels = next(batches); non_blocking = bool(cfg["data"].get("non_blocking", True)); x0, labels = x0.to(device, non_blocking=non_blocking).float(), labels.to(device, non_blocking=non_blocking); noise = torch.randn_like(x0); t = torch.rand(x0.shape[0], device=device); xt, target = linear_interpolant(x0, noise, t)
             with torch.autocast(device_type=device.type, dtype=dtype, enabled=autocast): loss = velocity_loss(model(xt, t, labels), target) / accum
             loss.backward(); total += float(loss.detach()) * accum
         if cfg["train"].get("grad_clip", 0): nn.utils.clip_grad_norm_(model.parameters(), cfg["train"]["grad_clip"])

@@ -199,3 +199,19 @@ Detailed evidence: [`reports/imagenette_sit_readiness.md`](reports/imagenette_si
 ### Decision
 
 Keep `mini_diffusion/sit/` independent of the existing DDPM/U-Net modules. Preserve cache-only SiT training and VAE decoding as a separate CLI step. Keep caches, checkpoints, previews, and large outputs ignored by Git.
+
+## 2026-07-17: Imagenette SiT-S/2 Performance Check
+
+### Goal
+
+Confirm the initial full-run configuration, CUDA attention path, and loader/optimizer settings without starting long training or changing the primary cache.
+
+### Outcome
+
+The direct PyTorch SDPA path selected fused memory-efficient attention. This wheel cannot use Flash Attention despite an RTX 4090 and BF16 head dimension 64, because it was not built with that kernel. Batch 256 with four workers was the fastest stable probe; batch 512 was slower and used substantially more VRAM. The full cache was absent and deliberately not created, so the isolated probes reused the existing debug cache without modifying it.
+
+Detailed evidence: [`reports/imagenette_sit_s_128_performance_check.md`](reports/imagenette_sit_s_128_performance_check.md)
+
+### Decision
+
+Set the first training milestone to 100,000 steps, log every 100 steps, and run fixed eight-image Heun-25 previews every 10,000 steps. Retain batch 256, workers 4, fused AdamW, foreach EMA, and the Heun-50 explicit CLI evaluation path. Full training remains unstarted.
