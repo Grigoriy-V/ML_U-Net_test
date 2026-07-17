@@ -183,3 +183,19 @@ Mark this as a partial-training snapshot, not a completed model. Keep the checkp
 - The original full Version 0 training is complete; the optimized configuration has only benchmark, smoke, resume, and sampling validation so far.
 - Tiny ImageNet has a verified partial snapshot at 150,000 of 400,000 steps. The extracted archive, real debug pipeline, and real loader benchmark passed; `batch_size: 64` with `grad_accum_steps: 2` remains selected.
 - The next milestone is either resuming this exact experiment from its saved checkpoint or beginning a separately scoped training run. Both should retain periodic DDIM-50 previews and checkpoints outside Git.
+
+## 2026-07-17: Imagenette Latent SiT-S/2 Debug Gate
+
+### Goal
+
+Establish a separate Imagenette-160 latent generative baseline: frozen Stable Diffusion VAE, deterministic latent cache, SiT-S/2 velocity training, and ODE decoding checks.
+
+### Outcome
+
+The CUDA/BF16 debug path passed from real data through VAE reconstruction, 32-image train/val caches, SiT checkpoint/resume, CUDA one-batch overfit, raw Euler and EMA Heun decoded PNGs. Repeated fixed EMA sampling was byte-identical. A short batch probe selected 256 as the full-config batch size; no full Imagenette training was started.
+
+Detailed evidence: [`reports/imagenette_sit_readiness.md`](reports/imagenette_sit_readiness.md)
+
+### Decision
+
+Keep `mini_diffusion/sit/` independent of the existing DDPM/U-Net modules. Preserve cache-only SiT training and VAE decoding as a separate CLI step. Keep caches, checkpoints, previews, and large outputs ignored by Git.
