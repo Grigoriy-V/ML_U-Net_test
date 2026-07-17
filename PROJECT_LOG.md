@@ -145,9 +145,25 @@ Detailed results: [`reports/tiny_imagenet_readiness.md`](reports/tiny_imagenet_r
 
 Use physical batch 64 with two accumulation steps for the initial config. Keep manual attention and retest batch size and Windows worker count with real JPEG files after the dataset passes validation. Do not start full training before real-data overfit, debug checkpoint/resume, and sample generation pass.
 
+## 2026-07-17: Tiny ImageNet Real-Data Gate
+
+### Goal
+
+Confirm that the extracted Tiny ImageNet archive, configured loader, and 64x64 training path are ready for a full run.
+
+### Outcome
+
+The extracted archive passed the integrity gate. Real-loader benchmarks selected `batch_size: 64` with `grad_accum_steps: 2`: `128 x 2` changed the effective batch to 256, consumed about twice the VRAM, and did not improve throughput. The real debug train, checkpoint, resume, periodic preview, and EMA CLI PNG path all passed on CUDA.
+
+Detailed results: [`reports/tiny_imagenet_readiness.md`](reports/tiny_imagenet_readiness.md)
+
+### Decision
+
+Start the first full Tiny ImageNet run with `mini_diffusion/configs/tiny_imagenet.yaml`. Keep generated checkpoints, logs, and preview grids outside Git.
+
 ## Current State And Next Milestone
 
 - CIFAR-10 debug and baseline pipelines are complete.
 - The original full Version 0 training is complete; the optimized configuration has only benchmark, smoke, resume, and sampling validation so far.
-- Tiny ImageNet code and the first-run config are prepared, but `datasets/tiny-imagenet-200/` has not been provided and no real Tiny ImageNet training or loader benchmark has been run.
-- The next milestone is to validate the extracted archive, repeat the debug correctness gate at 64x64, and profile real JPEG loading before starting a full run.
+- Tiny ImageNet code and the first-run config are prepared. The extracted archive passed the data gate; the real debug train, checkpoint, resume, and PNG sampling path passed; and the real loader benchmark selected `batch_size: 64` with `grad_accum_steps: 2`.
+- The next milestone is the first full Tiny ImageNet training run from `mini_diffusion/configs/tiny_imagenet.yaml`, with periodic DDIM-50 previews and checkpoints retained outside Git.

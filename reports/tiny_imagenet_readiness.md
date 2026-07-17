@@ -45,13 +45,28 @@ Expected archive MD5: `90528d7ca1a48142e341f4ef8d21d0de`
 
 ## Remaining Checks
 
-After the archive is extracted:
+The archive has been extracted and the 64x64 debug gate is complete. Before the full run, only a longer repeated benchmark is optional; the first-run configuration is ready.
 
-1. Run `mini_diffusion/validate_tiny_imagenet.py` with `num_workers: 0` behavior.
-2. Run the 64x64 one-batch overfit smoke test on real images.
-3. Complete debug train, checkpoint, resume, and DDIM sample PNG.
-4. Benchmark real-loader worker counts and compare `64 x 2` against `128 x 1` including JPEG decoding.
-5. Start full training only after all four checks pass.
+## Real-Data Batch Comparison
+
+The real Tiny ImageNet loader used four persistent Windows workers, pinned non-blocking transfer, five warmup steps, and 30 synchronized measured optimizer steps. Sampling, checkpointing, and TensorBoard logging were disabled.
+
+| Physical batch | Accumulation | Effective batch | Images/s | Mean optimizer step | Peak allocated | Peak reserved | Decision |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 64 | 2 | 128 | 458.07 | 0.2794 s | 7.73 GB | 8.29 GB | Keep |
+| 128 | 2 | 256 | 453.92 | 0.5640 s | 14.41 GB | 16.60 GB | Reject as default |
+
+Both runs had finite loss and approximately 99% GPU utilization. Data wait was below 0.4 ms per optimizer step, so JPEG decoding is not a current bottleneck. Batch `128 x 2` changes the optimization semantics to effective batch 256 while providing 0.9% lower throughput and consuming about twice the VRAM. The full config remains `batch_size: 64` with `grad_accum_steps: 2`.
+
+## Real Debug Pipeline
+
+The real-dataset debug configuration completed train, checkpoint, resume, and sampling on CUDA:
+
+- trained steps 1 through 4 and wrote `outputs/tiny_imagenet_debug_real/checkpoints/latest.pt`;
+- resumed from step 4 to step 6 with finite losses;
+- wrote periodic PNG grids at steps 2, 4, and 6;
+- generated `outputs/tiny_imagenet_debug_real/cli_samples/tiny_debug.png` from EMA weights;
+- sampling diagnostics reported finite values, zero saturation, and zero black/white failures.
 
 ## Checks Actually Run
 
@@ -62,5 +77,7 @@ After the archive is extracted:
 - Isolated synthetic comparisons for manual `64 x 2`, manual `128 x 1`, and SDPA `64 x 2`: passed with finite losses; results are in the table above.
 - `benchmark.py` synthetic smoke with the prepared config and four persistent Windows workers: passed with finite loss and effective batch 128.
 - Tiny ImageNet debug-model one-batch overfit on 64x64 FakeData: average loss decreased from 0.868714 in the first quarter to 0.362374 in the last quarter over 40 updates.
+- Real-data benchmarks for `64 x 2` and `128 x 2`: both passed with finite loss; the real-data table above records the result.
+- Real-dataset debug train, checkpoint, resume, periodic sampling, and EMA CLI sampling: passed.
 
 CUDA was used for every model/batch probe. Only synthetic smoke training and performance measurements were run; no Tiny ImageNet debug or full training run was performed.
