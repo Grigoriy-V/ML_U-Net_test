@@ -83,6 +83,13 @@ def training_limits(cfg: dict, cli_max_steps: int | None) -> tuple[int, int]:
     if stop_at < 1 or scheduler_total < 1:
         raise ValueError("stop_at and scheduler_total_steps must be positive")
     return stop_at, scheduler_total
+
+
+def mean_step_metrics(values: dict[str, float], count: int) -> dict[str, float]:
+    """Return per-microbatch means for logging without changing gradients."""
+    if count < 1:
+        raise ValueError("count must be positive")
+    return {name: value / count for name, value in values.items()}
 def make_loader(cfg: dict, repa_enabled: bool = False) -> tuple[DataLoader, dict]:
     payload = load_cache(Path(cfg["data"]["cache_dir"]) / "train.pt", expected_resolution=cfg["data"]["resolution"], expected_vae_model_id=cfg["vae"]["model_id"])
     class_filter = cfg["data"].get("class_filter")
@@ -212,22 +219,38 @@ def main() -> None:
     params = sum(p.numel() for p in trainable.parameters() if p.requires_grad); accum = cfg["train"].get("grad_accum_steps", 1); print(f"trainable_parameters: {params:,}\nbase_sit_parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}\nprojector_parameters: {sum(p.numel() for p in projector.parameters() if p.requires_grad) if projector else 0:,}\ndevice: {device}\ndtype: {dtype} autocast={autocast}\nbatch_size: {cfg['data']['batch_size']}\neffective_batch_size: {cfg['data']['batch_size'] * accum}\nstop_at_step: {max_steps}\nscheduler_total_steps: {scheduler_total_steps}\nvae_loaded_for_training: false\ndino_loaded_for_training: false")
     out = Path(cfg["output_dir"]); writer = SummaryWriter(out / "logs"); batches = infinite(loader); pbar = tqdm(total=max_steps, initial=step, desc=cfg["name"]); latest = out / "checkpoints" / "latest.pt"; model.train()
     while step < max_steps:
-        optimizer.zero_grad(set_to_none=True); total = 0.0
+        optimizer.zero_grad(set_to_none=True)
+        metric_sums = {"loss": 0.0, "flow_loss": 0.0}
+        if projector:
+            metric_sums.update({"repa_loss": 0.0, "repa_weighted_loss": 0.0, "cosine_similarity": 0.0})
         for _ in range(accum):
             batch = next(batches); x0, labels = batch[0], batch[1]; features = batch[2] if projector else None; non_blocking = bool(cfg["data"].get("non_blocking", True)); x0, labels = x0.to(device, non_blocking=non_blocking).float(), labels.to(device, non_blocking=non_blocking); features = features.to(device, non_blocking=non_blocking) if features is not None else None; noise = torch.randn_like(x0); t = torch.rand(x0.shape[0], device=device); xt, target = linear_interpolant(x0, noise, t)
             with torch.autocast(device_type=device.type, dtype=dtype, enabled=autocast):
                 if projector:
                     velocity, hidden = model(xt, t, labels, return_hidden_after=cfg["repa"]["alignment_depth"])
-                    flow_loss = velocity_loss(velocity, target); alignment_loss, cosine = repa_loss(projector(hidden), features); loss = (flow_loss + float(cfg["repa"]["coefficient"]) * alignment_loss) / accum
+                    flow_loss = velocity_loss(velocity, target); alignment_loss, cosine = repa_loss(projector(hidden), features)
+                    repa_weighted_loss = float(cfg["repa"]["coefficient"]) * alignment_loss
+                    total_loss = flow_loss + repa_weighted_loss; loss = total_loss / accum
                 else:
-                    flow_loss = velocity_loss(model(xt, t, labels), target); alignment_loss = cosine = None; loss = flow_loss / accum
-            loss.backward(); total += float(loss.detach()) * accum
+                    flow_loss = velocity_loss(model(xt, t, labels), target); alignment_loss = cosine = None; total_loss = flow_loss; loss = flow_loss / accum
+            loss.backward()
+            metric_sums["loss"] += float(total_loss.detach())
+            metric_sums["flow_loss"] += float(flow_loss.detach())
+            if projector:
+                metric_sums["repa_loss"] += float(alignment_loss.detach())
+                metric_sums["repa_weighted_loss"] += float(repa_weighted_loss.detach())
+                metric_sums["cosine_similarity"] += float(cosine.detach())
         if cfg["train"].get("grad_clip", 0): nn.utils.clip_grad_norm_(trainable.parameters(), cfg["train"]["grad_clip"])
         optimizer.step(); ema.update(model); scheduler.step() if scheduler is not None else None; step += 1; pbar.update(1)
         if step % cfg["train"].get("log_every", 1) == 0:
-            writer.add_scalar("train/loss", total, step); writer.add_scalar("train/flow_loss", float(flow_loss.detach()), step); writer.add_scalar("train/learning_rate", optimizer.param_groups[0]["lr"], step)
-            if projector: writer.add_scalar("train/repa_loss", float(alignment_loss.detach()), step); writer.add_scalar("train/cosine_similarity", float(cosine.detach()), step); writer.add_scalar("train/repa_coefficient", float(cfg["repa"]["coefficient"]), step)
-            pbar.set_postfix(loss=f"{total:.4f}")
+            metrics = mean_step_metrics(metric_sums, accum)
+            writer.add_scalar("train/loss", metrics["loss"], step); writer.add_scalar("train/flow_loss", metrics["flow_loss"], step); writer.add_scalar("train/learning_rate", optimizer.param_groups[0]["lr"], step)
+            if projector:
+                writer.add_scalar("train/repa_loss", metrics["repa_loss"], step)
+                writer.add_scalar("train/repa_weighted_loss", metrics["repa_weighted_loss"], step)
+                writer.add_scalar("train/cosine_similarity", metrics["cosine_similarity"], step)
+                writer.add_scalar("train/repa_coefficient", float(cfg["repa"]["coefficient"]), step)
+            pbar.set_postfix(loss=f"{metrics['loss']:.4f}")
         if step % cfg["train"].get("sample_every", 10**9) == 0: print(f"latent_preview_written: {write_latent_preview(model, ema, cfg, device, step)}")
         if step % cfg["train"].get("save_every", 100) == 0:
             save_checkpoint(latest, model, optimizer, ema, cfg, step, cache_fingerprint(payload), projector, feature_metadata, scheduler)

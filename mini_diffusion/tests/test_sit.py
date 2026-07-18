@@ -7,7 +7,7 @@ import torch
 from mini_diffusion.diffusion import EMA
 from mini_diffusion.latent_cache import CACHE_FORMAT_VERSION, load_cache, validate_cache
 from mini_diffusion.sit import SiT, linear_interpolant, sample_ode, velocity_loss
-from mini_diffusion.train_sit import build_model, build_optimizer, build_scheduler, resume_checkpoint, save_checkpoint, training_limits
+from mini_diffusion.train_sit import build_model, build_optimizer, build_scheduler, mean_step_metrics, resume_checkpoint, save_checkpoint, training_limits
 
 
 def tiny_sit() -> SiT:
@@ -67,6 +67,11 @@ def test_sit_scheduler_roundtrip_and_resume(tmp_path) -> None:
 def test_cli_stop_step_does_not_shorten_scheduler_horizon() -> None:
     cfg = {"train": {"max_steps": 100000, "scheduler_total_steps": 100000}}
     assert training_limits(cfg, 10000) == (10000, 100000)
+
+
+def test_grad_accumulation_logging_uses_microbatch_means() -> None:
+    metrics = mean_step_metrics({"loss": 3.0, "flow_loss": 2.0, "repa_loss": 1.0, "repa_weighted_loss": 0.5}, 2)
+    assert metrics == {"loss": 1.5, "flow_loss": 1.0, "repa_loss": 0.5, "repa_weighted_loss": 0.25}
 
 
 def test_foreach_ema_updates() -> None:

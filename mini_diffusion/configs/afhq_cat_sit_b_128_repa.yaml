@@ -1,0 +1,70 @@
+name: afhq_cat_sit_b_128_repa
+seed: 123
+output_dir: outputs/afhq_cat_sit_b_128_repa
+data:
+  dataset: afhq-cat-official
+  root: datasets/afhq
+  cache_dir: outputs/afhq_cat_sit_b_128/latents
+  resolution: 128
+  latent_resolution: 16
+  num_classes: 1
+  augmentation_variants: 4
+  augmentation_scale: [0.85, 1.0]
+  augmentation_seed: 123
+  latent_seed: 123
+  prepare_batch_size: 32
+  prepare_num_workers: 0
+  batch_size: 128
+  num_workers: 4
+  pin_memory: true
+  non_blocking: true
+  persistent_workers: true
+  prefetch_factor: 2
+vae:
+  model_id: stabilityai/sd-vae-ft-mse
+  revision: null
+model:
+  patch_size: 2
+  hidden_size: 768
+  depth: 12
+  num_heads: 12
+  mlp_ratio: 4.0
+  cond_drop_prob: 0.1
+repa:
+  enabled: true
+  teacher: dinov2_vitb14
+  teacher_input_resolution: 224
+  teacher_feature_dim: 768
+  alignment_depth: 8
+  projector_hidden_dim: 2048
+  coefficient: 0.5
+  feature_cache_dir: outputs/afhq_cat_sit_b_128_repa/dino_features
+train:
+  init_from: null
+  max_steps: 100000
+  scheduler_total_steps: 100000
+  learning_rate: 0.0001
+  min_learning_rate: 0.00001
+  warmup_steps: 1000
+  weight_decay: 0.01
+  grad_accum_steps: 2
+  grad_clip: 1.0
+  ema_decay: 0.9999
+  dtype: bf16
+  log_every: 100
+  save_every: 5000
+  milestone_every: 5000
+  sample_every: 5000
+sampling:
+  preview_sampler: heun
+  preview_steps: 25
+  preview_seed: 123
+  preview_count: 16
+  preview_class: 0
+  preview_guidance_scales: [1.0]
+  preview_weights: [raw, ema]
+  preview_decode: true
+performance:
+  fused_adamw: true
+  ema_foreach: true
+  cudnn_benchmark: true

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import gc
+import hashlib
 import json
 import subprocess
 import sys
@@ -18,7 +19,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
-from mini_diffusion.data import build_imagenette
+from mini_diffusion.data import AFHQCatDataset, build_imagenette
 from mini_diffusion.latent_cache import cache_fingerprint, load_cache
 from mini_diffusion.repa import (
     REPA_CACHE_FORMAT_VERSION,
@@ -72,6 +73,47 @@ def source_indices(dataset, relative_paths: list[str]) -> list[int]:
     return [lookup[path] for path in relative_paths]
 
 
+def source_dataset(cfg: dict, latent: dict, split: str, download_dataset: bool):
+    data_cfg = cfg["data"]
+    if data_cfg["dataset"] == "imagenette-160":
+        dataset = build_imagenette(data_cfg["root"], split, data_cfg["resolution"], download=download_dataset)
+        indices = source_indices(dataset, latent["relative_paths"])
+        expected_labels = latent["labels"].tolist()
+        actual_labels = [dataset.samples[index][1] for index in indices]
+        if actual_labels != expected_labels:
+            raise ValueError("Imagenette labels do not match latent cache labels for relative paths")
+        return Subset(dataset, indices), "none"
+    if data_cfg["dataset"] == "afhq-cat-official":
+        if split != "train":
+            raise ValueError("AFHQ REPA features are only required for the train cache")
+        dataset = AFHQCatDataset(
+            data_cfg["root"], "train", int(data_cfg["resolution"]),
+            augmentation_variants=int(data_cfg["augmentation_variants"]),
+            seed=int(data_cfg.get("augmentation_seed", cfg.get("seed", 123))),
+            crop_scale=tuple(float(value) for value in data_cfg["augmentation_scale"]),
+        )
+        manifest = dataset.manifest()[:len(latent["relative_paths"])]
+        if [entry["source_path"] for entry in manifest] != latent["relative_paths"]:
+            raise ValueError("AFHQ feature preprocessing order does not match the latent cache manifest")
+        manifest_path = Path(data_cfg["cache_dir"]) / "train_manifest.jsonl"
+        cached_manifest = [json.loads(line) for line in manifest_path.read_text(encoding="utf-8").splitlines()][:len(manifest)]
+        expected_manifest = [
+            {key: entry[key] for key in ("source_path", "augmentation_seed", "augmentation_index", "split", "sha256")}
+            for entry in manifest
+        ]
+        actual_manifest = [
+            {key: entry[key] for key in ("source_path", "augmentation_seed", "augmentation_index", "split", "sha256")}
+            for entry in cached_manifest
+        ]
+        if actual_manifest != expected_manifest:
+            raise ValueError("AFHQ feature preprocessing manifest does not match the latent cache manifest")
+        if len(manifest) != len(latent["labels"]) or any(label != 0 for label in latent["labels"].tolist()):
+            raise ValueError("AFHQ feature labels do not match the latent cache")
+        digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        return Subset(dataset, range(len(manifest))), f"deterministic RandomResizedCrop(scale=0.85-1.0, ratio=1.0) + horizontal flip; exact AFHQ train manifest order; manifest_sha256={digest}"
+    raise ValueError(f"REPA feature preparation does not support dataset={data_cfg['dataset']!r}")
+
+
 def prepare_split(cfg: dict, split: str, limit: int | None, force: bool, download_dataset: bool) -> Path:
     repa_cfg, data_cfg = cfg["repa"], cfg["data"]
     if int(repa_cfg["teacher_input_resolution"]) != 224 or int(repa_cfg["teacher_feature_dim"]) != 768:
@@ -80,13 +122,7 @@ def prepare_split(cfg: dict, split: str, limit: int | None, force: bool, downloa
     latent = load_cache(latent_path, expected_resolution=data_cfg["resolution"], expected_vae_model_id=cfg["vae"]["model_id"])
     if limit is not None:
         latent = {**latent, "latents": latent["latents"][:limit], "labels": latent["labels"][:limit], "relative_paths": latent["relative_paths"][:limit]}
-    dataset = build_imagenette(data_cfg["root"], split, data_cfg["resolution"], download=download_dataset)
-    indices = source_indices(dataset, latent["relative_paths"])
-    ordered = Subset(dataset, indices)
-    expected_labels = latent["labels"].tolist()
-    actual_labels = [dataset.samples[index][1] for index in indices]
-    if actual_labels != expected_labels:
-        raise ValueError("Imagenette labels do not match latent cache labels for relative paths")
+    ordered, augmentation = source_dataset(cfg, latent, split, download_dataset)
     destination = Path(repa_cfg["feature_cache_dir"]) / split
     if destination.exists() and not force:
         raise FileExistsError(f"Feature cache exists: {destination}. Pass --force to overwrite it.")
@@ -120,7 +156,7 @@ def prepare_split(cfg: dict, split: str, limit: int | None, force: bool, downloa
         "preprocessing": "VAE-cache deterministic RGB128 crop -> Resize(224,bicubic,antialias) -> ImageNet normalize",
         "latent_cache_fingerprint": cache_fingerprint(latent), "split": split, "feature_shape": list(feature_view.shape),
         "feature_dtype": str(feature_view.dtype), "pooling": "adaptive_avg_pool2d 16x16 -> 8x8; row-major [B,64,768]",
-        "class_mapping": sorted(set(int(x) for x in labels.tolist())), "augmentation": "none",
+        "class_mapping": sorted(set(int(x) for x in labels.tolist())), "augmentation": augmentation,
         "statistics": {"mean": float(feature_view.mean(dtype=np.float64)), "std": float(feature_view.std(dtype=np.float64)), "min": float(feature_view.min()), "max": float(feature_view.max()), "finite": bool(np.isfinite(feature_view).all()), "size_bytes": int(paths["features"].stat().st_size)},
     }
     metadata["fingerprint"] = feature_cache_fingerprint(metadata, paths["features"])

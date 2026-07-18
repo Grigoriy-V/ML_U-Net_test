@@ -453,3 +453,17 @@ Raw 20k improved FID from `55.644` to `48.051`, KID from `0.02740` to `0.02052`,
 ### Decision
 
 Freeze raw 20k as the current model version. Do not treat the current `train/loss` and `train/flow_loss` tags as directly comparable means; correct or relabel logging before the next training resume. No full evaluation, sampler ablation, or additional training occurred in this milestone.
+
+## 2026-07-18: AFHQ Cats SiT-B/2 REPA Readiness
+
+### Goal
+
+Prepare an isolated AFHQ Cats SiT-B/2 REPA training run from scratch, correct accumulation-aware loss logging, and verify it without modifying the 20k non-REPA baseline.
+
+### Outcome
+
+The DINOv2 ViT-B/14 teacher cache contains 20,612 finite grids paired with the exact deterministic AFHQ crop/flip manifest. The fixed REPA setup preserves the baseline SiT initialization under seed 123, adds a 7.34M-parameter projector, and uses physical batch 128 with accumulation 2. CUDA BF16 overfit, train/checkpoint/resume, decoded raw/EMA preview, and a 10+50-step benchmark completed; the benchmark measured 1,942.69 images/s, 65.89 ms/step, and 5.93 GB peak reserved VRAM. The baseline frozen 20k SHA-256 remained unchanged.
+
+### Decision
+
+Commit the isolated config and readiness evidence before training. The REPA run is ready to begin at step 0 through 20k, saving independent checkpoints and previews every 5k. No long REPA training, full evaluation, or sampler ablation was launched by this milestone.
