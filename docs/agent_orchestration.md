@@ -6,7 +6,7 @@
 
 The human approves direction and manually launches long training or evaluation commands. The supervisor reads evidence, writes a bounded worker task specification, reviews results, and makes the final `continue`, `stop`, `change`, or `freeze` decision. The worker performs only the approved implementation, investigation, validation, and logging work.
 
-For every worker task: (1) supervisor dispatches scope, permitted files/artifacts and commands, stop conditions, reporting requirements, and acceptance criteria; (2) worker appends `started`; (3) worker executes approved work and records actual ML operations when applicable; (4) worker appends exactly one terminal `completed`, `failed`, or `interrupted` event; (5) supervisor accepts, rejects, or changes the next action. The supervisor reads the agent ledger only for acceptance, anomalies/failures, or retrospectives.
+For every worker task: (1) supervisor dispatches scope, permitted files/artifacts and commands, stop conditions, reporting requirements, and acceptance criteria; (2) worker appends `started`; (3) worker executes approved work and records actual ML operations when applicable; (4) worker appends exactly one terminal `completed`, `failed`, or `interrupted` event; (5) only after explicit review, the supervisor appends `reviewed` with `accept`, `reject`, or `change`. Worker lifecycle events must always set `supervisor_decision` to `null`. The supervisor reads the agent ledger only for acceptance, anomalies/failures, or retrospectives.
 
 ## Routing and reasoning policy
 
@@ -28,6 +28,6 @@ On validation failure, interruption, timeout, NaN/Inf, OOM, output collision, or
 
 ## Audit linkage
 
-`reports/agent_execution_ledger.jsonl` is append-only and records `agent_run_id`, requested model/reasoning, scope, commands, changed files, outcomes, and known Git commits. Terminal events list actual `ml_ledger_event_ids`. Keep paths repository-relative; do not record secrets, absolute local paths, or invented token/credit usage.
+`reports/agent_execution_ledger.jsonl` is append-only and records `agent_run_id`, requested model/reasoning, scope, commands, changed files, outcomes, and known Git commits. A `correction` event identifies an earlier erroneous event in `notes` or `outcome_summary` and never rewrites it. A `reviewed` event is a supervisor-only record after explicit review. Terminal events list actual `ml_ledger_event_ids`. A terminal event committed in its own resulting commit cannot honestly know that commit hash, so `git_commit_after` may remain `null`. Keep paths repository-relative; do not record secrets, absolute local paths, or invented token/credit usage.
 
 `reports/experiment_ledger.jsonl` remains the source of truth for actual ML operations and experiment decisions. The agent ledger records how bounded worker tasks were dispatched and concluded.

@@ -522,3 +522,7 @@ Validated TOML parsing for the config and profiles, validated all agent-ledger J
 ### Decision
 
 Adopt the new agent ledger for worker dispatches and terminal outcomes. Keep the current semi-automatic manual long-run process; if an already-open session does not expose Luna, use Terra low until a new session or restart loads project custom-agent profiles.
+
+### Audit correction
+
+Worker terminal records now leave `supervisor_decision` null. Supervisor acceptance is represented by a later `reviewed` event; the original bootstrap completion's premature `accept` is preserved append-only and corrected in the agent ledger.

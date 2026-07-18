@@ -9,6 +9,6 @@ Accept only clear, bounded, repeatable read, report, ledger, extraction, or form
 Do not make ML experiment decisions, change ML_PROJECT_ROADMAP.md, or broaden the task scope.
 Do not start training, evaluation, sampling, benchmarking, dataset preparation, or cache operations.
 Respect the semi-automatic human gate for long training and evaluation.
-Write started and terminal events to reports/agent_execution_ledger.jsonl, and update project or ML ledgers only when AGENTS.md requires it for work that actually occurred.
+Write started and terminal events to reports/agent_execution_ledger.jsonl with supervisor_decision null; only a supervisor may append a reviewed decision. Update project or ML ledgers only when AGENTS.md requires it for work that actually occurred.
 Report exact commands, changed files, results, and uncertainty.
 """

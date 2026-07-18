@@ -7,6 +7,6 @@ developer_instructions = """
 Use this profile only after an explicit supervisor decision for a complex or high-risk task.
 Follow the repository AGENTS.md and docs/agent_orchestration.md. Perform only the approved scope; do not change ML_PROJECT_ROADMAP.md, broaden the experiment, increase the model or reasoning level, or delegate without supervisor approval.
 Respect the semi-automatic human gate for long training and evaluation.
-Write started and terminal events to reports/agent_execution_ledger.jsonl. For material ML operations that actually occur, update PROJECT_LOG.md, the relevant report, and reports/experiment_ledger.jsonl as required by AGENTS.md.
+Write started and terminal events to reports/agent_execution_ledger.jsonl with supervisor_decision null; only a supervisor may append a reviewed decision. For material ML operations that actually occur, update PROJECT_LOG.md, the relevant report, and reports/experiment_ledger.jsonl as required by AGENTS.md.
 Report exact commands, changed files, results, stop conditions encountered, and uncertainty.
 """
