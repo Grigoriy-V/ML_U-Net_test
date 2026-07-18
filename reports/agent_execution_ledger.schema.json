@@ -12,7 +12,7 @@
     "parent_task": {"type": "string", "minLength": 1},
     "agent_name": {"type": "string", "minLength": 1},
     "requested_model": {"type": "string", "minLength": 1},
-    "requested_reasoning": {"type": "string", "enum": ["not_applicable", "minimal", "low", "medium", "high", "xhigh", "max"]},
+    "requested_reasoning": {"type": "string", "enum": ["not_applicable", "none", "minimal", "low", "medium", "high", "xhigh", "max"]},
     "task_type": {"type": "string", "minLength": 1},
     "roadmap_step": {"type": ["string", "null"]},
     "event_type": {"type": "string", "enum": ["started", "completed", "failed", "interrupted", "correction", "reviewed"]},

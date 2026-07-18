@@ -536,3 +536,7 @@ The built-in Luna launcher rejected `minimal` before worker execution because th
 ### Decision
 
 Use a newly loaded custom Luna profile with `none`; until it is available, route deterministic clerical tasks to Terra at `low`.
+
+### Ledger correction
+
+The Luna availability events were incorrectly rewritten to `not_applicable` after the ledger schema rejected the valid Luna reasoning value `none`. The original JSONL lines remain preserved; the schema now allows `none`, and append-only correction events define their actual requested reasoning as `none`.
