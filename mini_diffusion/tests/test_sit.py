@@ -7,7 +7,7 @@ import torch
 from mini_diffusion.diffusion import EMA
 from mini_diffusion.latent_cache import CACHE_FORMAT_VERSION, load_cache, validate_cache
 from mini_diffusion.sit import SiT, linear_interpolant, sample_ode, velocity_loss
-from mini_diffusion.train_sit import build_model, build_optimizer, build_scheduler, mean_step_metrics, resume_checkpoint, save_checkpoint, training_limits
+from mini_diffusion.train_sit import build_model, build_optimizer, build_scheduler, mean_step_metrics, resume_checkpoint, resume_repa_off_fork, save_checkpoint, training_limits, validate_repa_off_fork_target
 
 
 def tiny_sit() -> SiT:
@@ -62,6 +62,36 @@ def test_sit_scheduler_roundtrip_and_resume(tmp_path) -> None:
     restored = build_model(cfg); restored_optimizer = build_optimizer(restored, cfg); restored_scheduler = build_scheduler(restored_optimizer, cfg, 20); restored_ema = EMA(restored, 0.9)
     assert resume_checkpoint(str(path), restored, restored_optimizer, restored_ema, torch.device("cpu"), scheduler=restored_scheduler) == 5
     assert restored_scheduler.state_dict() == scheduler.state_dict()
+
+
+def test_repa_off_fork_preserves_sit_optimizer_scheduler_ema_and_rng(tmp_path) -> None:
+    import hashlib
+    from torch import nn
+
+    source_cfg = {"data": {"resolution": 128, "latent_resolution": 16, "num_classes": 1}, "vae": {"model_id": "stabilityai/sd-vae-ft-mse", "revision": None}, "model": {"patch_size": 2, "hidden_size": 48, "depth": 2, "num_heads": 6, "mlp_ratio": 2.0, "cond_drop_prob": 0.0}, "repa": {"enabled": True}, "train": {"learning_rate": 1e-3, "min_learning_rate": 1e-4, "warmup_steps": 3, "weight_decay": 0.0, "grad_accum_steps": 1, "grad_clip": 1.0, "ema_decay": 0.9, "scheduler_total_steps": 20}}
+    source_model, projector = build_model(source_cfg), nn.Linear(48, 8)
+    source_modules = nn.ModuleList([source_model, projector]); source_optimizer = build_optimizer(source_modules, source_cfg); source_scheduler = build_scheduler(source_optimizer, source_cfg, 20); source_ema = EMA(source_model, 0.9)
+    source_optimizer.zero_grad()
+    sum(parameter.square().mean() for parameter in source_modules.parameters()).backward()
+    source_optimizer.step(); source_scheduler.step(); source_ema.update(source_model)
+    source_path = tmp_path / "repa_10k.pt"; save_checkpoint(source_path, source_model, source_optimizer, source_ema, source_cfg, 10000, "cache", projector=projector, feature_metadata={"fingerprint": "features"}, scheduler=source_scheduler)
+    digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    target_cfg = {**source_cfg, "repa": {"enabled": False}, "fork_repa_off": {"source_checkpoint": str(source_path), "source_step": 10000, "source_sha256": digest}}
+    target_model = build_model(target_cfg); target_optimizer = build_optimizer(target_model, target_cfg); target_scheduler = build_scheduler(target_optimizer, target_cfg, 20); target_ema = EMA(target_model, 0.9)
+    assert resume_repa_off_fork(str(source_path), target_model, target_optimizer, target_ema, torch.device("cpu"), target_cfg, "cache", target_scheduler) == 10000
+    assert all(torch.equal(left, right) for left, right in zip(source_model.parameters(), target_model.parameters()))
+    assert target_scheduler.state_dict() == source_scheduler.state_dict()
+    assert len(target_optimizer.state_dict()["param_groups"][0]["params"]) == len(list(target_model.parameters()))
+    assert all(torch.equal(source_ema.shadow[name], target_ema.shadow[name]) for name in source_ema.shadow)
+
+
+def test_repa_off_fork_refuses_nonempty_target_output(tmp_path) -> None:
+    output = tmp_path / "fork-output"; output.mkdir(); (output / "unexpected.txt").write_text("do not mix lineages", encoding="utf-8")
+    cfg = {"output_dir": str(output), "repa": {"enabled": False}, "fork_repa_off": {"source_checkpoint": str(tmp_path / "source.pt"), "source_step": 10000, "source_sha256": "unused"}}
+    try:
+        validate_repa_off_fork_target(cfg, str(tmp_path / "source.pt"))
+    except FileExistsError: pass
+    else: raise AssertionError("non-empty fork output was accepted")
 
 
 def test_cli_stop_step_does_not_shorten_scheduler_horizon() -> None:

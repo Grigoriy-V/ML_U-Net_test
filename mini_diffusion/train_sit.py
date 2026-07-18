@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import copy
+import hashlib
 import json
 import math
 import os
@@ -151,6 +153,102 @@ def resume_checkpoint(path: str, model, optimizer, ema, device, expected_cache_f
             ema.shadow[name] = ema.shadow[name].to(parameter.device, dtype=parameter.dtype)
     if device.type == "cuda" and ckpt.get("cuda_rng_state") is not None: torch.cuda.set_rng_state_all([x.cpu() for x in ckpt["cuda_rng_state"]])
     return int(ckpt["global_step"])
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _assert_matching_resume_recipe(source: dict, target: dict) -> None:
+    """Reject a fork if it would silently alter SiT/optimizer/scheduler semantics."""
+    for section, keys in {
+        "data": ("resolution", "latent_resolution", "num_classes"),
+        "vae": ("model_id", "revision"),
+        "model": ("patch_size", "hidden_size", "depth", "num_heads", "mlp_ratio", "cond_drop_prob"),
+        "train": ("learning_rate", "min_learning_rate", "warmup_steps", "weight_decay", "grad_accum_steps", "grad_clip", "ema_decay", "scheduler_total_steps"),
+    }.items():
+        for key in keys:
+            if source[section].get(key) != target[section].get(key):
+                raise ValueError(f"REPA-off fork changes {section}.{key}; model/optimizer/scheduler/EMA semantics must match the source checkpoint")
+
+
+def resume_repa_off_fork(path: str, model, optimizer, ema, device, cfg: dict, expected_cache_fingerprint: str, scheduler) -> int:
+    """Fork a REPA checkpoint into a no-REPA run while retaining all SiT state.
+
+    The source optimizer has one trailing projector parameter segment.  We retain
+    its model segment verbatim and explicitly discard only projector state; the
+    target has no projector, DINO cache, or feature-loader path.
+    """
+    source_path = Path(path)
+    fork = cfg.get("fork_repa_off") or {}
+    if not fork:
+        raise ValueError("REPA-off fork metadata is required")
+    configured_source = (ROOT / fork["source_checkpoint"]).resolve()
+    if source_path.resolve() != configured_source:
+        raise ValueError("REPA-off fork must resume exactly the configured source checkpoint")
+    if _sha256(source_path).lower() != str(fork["source_sha256"]).lower():
+        raise ValueError("REPA-off fork source checkpoint SHA-256 does not match the approved artifact")
+    checkpoint = torch.load(source_path, map_location="cpu", weights_only=False)
+    if int(checkpoint.get("global_step", -1)) != int(fork["source_step"]):
+        raise ValueError("REPA-off fork source checkpoint step does not match the approved fork step")
+    if checkpoint.get("cache_fingerprint") != expected_cache_fingerprint:
+        raise ValueError("REPA-off fork checkpoint cache fingerprint does not match the current latent cache")
+    if not checkpoint.get("repa", {}).get("enabled") or "repa_projector" not in checkpoint:
+        raise ValueError("REPA-off fork source must be a REPA checkpoint with an explicit projector state")
+    _assert_matching_resume_recipe(checkpoint["config"], cfg)
+    if "scheduler" not in checkpoint:
+        raise ValueError("REPA-off fork source checkpoint has no scheduler state")
+    if not all(key in checkpoint for key in ("model", "ema", "optimizer", "torch_rng_state", "numpy_rng_state", "python_rng_state")):
+        raise ValueError("REPA-off fork source checkpoint is missing required resume state")
+    model.load_state_dict(checkpoint["model"])
+    ema.load_state_dict(checkpoint["ema"])
+
+    source_optimizer = checkpoint["optimizer"]
+    target_optimizer = optimizer.state_dict()
+    source_groups, target_groups = source_optimizer.get("param_groups", []), target_optimizer.get("param_groups", [])
+    if len(source_groups) != 1 or len(target_groups) != 1:
+        raise ValueError("REPA-off fork supports exactly one AdamW parameter group; refusing ambiguous optimizer translation")
+    source_ids, target_ids = source_groups[0]["params"], target_groups[0]["params"]
+    model_parameter_count = len(list(model.parameters()))
+    if len(target_ids) != model_parameter_count or len(source_ids) <= model_parameter_count:
+        raise ValueError("REPA-off fork optimizer layout is incompatible with model-plus-projector source state")
+    model_source_ids = source_ids[:model_parameter_count]
+    projector_source_ids = source_ids[model_parameter_count:]
+    if any(source_id not in source_optimizer["state"] for source_id in model_source_ids):
+        raise ValueError("REPA-off fork source optimizer lacks state for one or more SiT parameters")
+    if not projector_source_ids:
+        raise ValueError("REPA-off fork source optimizer has no explicit projector parameter segment")
+    translated_group = copy.deepcopy(source_groups[0]); translated_group["params"] = target_ids
+    translated_state = {target_id: copy.deepcopy(source_optimizer["state"][source_id]) for source_id, target_id in zip(model_source_ids, target_ids)}
+    optimizer.load_state_dict({"state": translated_state, "param_groups": [translated_group]})
+    scheduler.load_state_dict(checkpoint["scheduler"])
+    torch.set_rng_state(checkpoint["torch_rng_state"].cpu()); np.random.set_state(checkpoint["numpy_rng_state"]); random.setstate(checkpoint["python_rng_state"])
+    for name, parameter in model.named_parameters():
+        if name in ema.shadow:
+            ema.shadow[name] = ema.shadow[name].to(parameter.device, dtype=parameter.dtype)
+    if device.type == "cuda" and checkpoint.get("cuda_rng_state") is not None:
+        torch.cuda.set_rng_state_all([state.cpu() for state in checkpoint["cuda_rng_state"]])
+    return int(checkpoint["global_step"])
+
+
+def validate_repa_off_fork_target(cfg: dict, resume: str | None) -> None:
+    fork = cfg.get("fork_repa_off")
+    if not fork:
+        return
+    if cfg.get("repa", {}).get("enabled", False):
+        raise ValueError("REPA-off fork config must disable REPA")
+    if resume is None:
+        raise ValueError("REPA-off fork requires --resume with the configured 10k REPA checkpoint")
+    output = (ROOT / cfg["output_dir"]).resolve()
+    source = (ROOT / fork["source_checkpoint"]).resolve()
+    if output == source.parent.parent:
+        raise ValueError("REPA-off fork output directory must differ from the always-on REPA source output")
+    if output.exists() and any(output.iterdir()):
+        raise FileExistsError("REPA-off fork output directory is not empty; refusing to overwrite or mix a lineage")
 def overfit_smoke(cfg: dict, updates: int) -> None:
     set_seed(cfg.get("seed", 123)); device, dtype, autocast = device_dtype(cfg); model = build_model(cfg).to(device); projector = build_projector(cfg, device); modules = list(model.parameters()) + (list(projector.parameters()) if projector else []); optimizer = torch.optim.AdamW(modules, lr=max(cfg["train"]["learning_rate"], 1e-3)); loader, _ = make_loader(cfg, projector is not None); batch = next(iter(loader)); x0, labels = batch[0].to(device).float(), batch[1].to(device); features = batch[2].to(device) if projector else None; noise, t = torch.randn_like(x0), torch.linspace(0.1, 0.9, x0.shape[0], device=device); xt, target = linear_interpolant(x0, noise, t); losses = []; cosines = []
     for _ in range(updates):
@@ -209,13 +307,19 @@ def main() -> None:
     if args.overfit_smoke: overfit_smoke(cfg, args.overfit_updates); return
     if cfg.get("train", {}).get("init_from"):
         raise ValueError("init_from is forbidden for this SiT+REPA experiment; train from scratch or resume its own REPA checkpoint")
+    validate_repa_off_fork_target(cfg, args.resume)
     max_steps, scheduler_total_steps = training_limits(cfg, args.max_steps); set_seed(cfg.get("seed", 123)); device, dtype, autocast = device_dtype(cfg)
     torch.backends.cudnn.benchmark = bool(cfg.get("performance", {}).get("cudnn_benchmark", False)); model = build_model(cfg).to(device); projector = build_projector(cfg, device); trainable = nn.ModuleList([model] + ([projector] if projector else [])); optimizer = build_optimizer(trainable, cfg); scheduler = build_scheduler(optimizer, cfg, scheduler_total_steps); ema = EMA(model, cfg["train"]["ema_decay"], foreach=cfg.get("performance", {}).get("ema_foreach", False)); loader, payload = make_loader(cfg, projector is not None); feature_metadata = getattr(loader.dataset, "metadata", None)
     if projector is not None:
         # Open/validate cache in the parent before workers are spawned; workers reopen mmap handles lazily.
         loader.dataset._open_features(); feature_metadata = loader.dataset.metadata
     feature_fp = feature_metadata.get("fingerprint") if feature_metadata else None
-    step = resume_checkpoint(args.resume, model, optimizer, ema, device, cache_fingerprint(payload), projector, feature_fp, scheduler) if args.resume else 0
+    if args.resume:
+        step = (resume_repa_off_fork(args.resume, model, optimizer, ema, device, cfg, cache_fingerprint(payload), scheduler)
+                if cfg.get("fork_repa_off") else
+                resume_checkpoint(args.resume, model, optimizer, ema, device, cache_fingerprint(payload), projector, feature_fp, scheduler))
+    else:
+        step = 0
     params = sum(p.numel() for p in trainable.parameters() if p.requires_grad); accum = cfg["train"].get("grad_accum_steps", 1); print(f"trainable_parameters: {params:,}\nbase_sit_parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}\nprojector_parameters: {sum(p.numel() for p in projector.parameters() if p.requires_grad) if projector else 0:,}\ndevice: {device}\ndtype: {dtype} autocast={autocast}\nbatch_size: {cfg['data']['batch_size']}\neffective_batch_size: {cfg['data']['batch_size'] * accum}\nstop_at_step: {max_steps}\nscheduler_total_steps: {scheduler_total_steps}\nvae_loaded_for_training: false\ndino_loaded_for_training: false")
     out = Path(cfg["output_dir"]); writer = SummaryWriter(out / "logs"); batches = infinite(loader); pbar = tqdm(total=max_steps, initial=step, desc=cfg["name"]); latest = out / "checkpoints" / "latest.pt"; model.train()
     while step < max_steps:

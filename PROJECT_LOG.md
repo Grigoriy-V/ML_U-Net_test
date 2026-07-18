@@ -481,3 +481,26 @@ The comparison CLI verified all checkpoint steps, architecture/VAE compatibility
 ### Decision
 
 Use `evaluation/afhq_cat_baseline_vs_repa_10k_20k/report.md` and its paired grids as the canonical equal-budget evidence. Treat REPA raw 20k as the best REPA checkpoint so far, but do not claim it exceeds baseline at the same training budget. Full-1000 evaluation, sampler ablation, CFG sweep, and training remain out of scope.
+
+## 2026-07-18: AFHQ Cats REPA Early-Stop Fork Preparation
+
+### Goal
+
+Prepare the approved `REPA 10k -> REPA OFF -> 20k` lineage for a user-controlled manual training run, without starting the long run or touching the always-on REPA artifacts.
+
+### Outcome
+
+Added an isolated `afhq_cat_sit_b_128_repa_early_stop` config and an explicit guarded fork-resume path. It validates the exact approved REPA 10k checkpoint and SHA-256, source step, cache fingerprint, output isolation, and matching SiT/optimizer/scheduler/EMA recipe. It restores SiT weights, model-only AdamW state, scheduler, EMA, global step, and RNG states; it explicitly validates then discards the obsolete projector optimizer segment. Because REPA is disabled, the post-10k path creates no projector and does not open the DINO feature cache or compute REPA loss. The comparison markdown generator now emits the numerical `repa_raw_vs_ema_20k` section.
+
+The targeted CPU unit suite completed with `15 passed in 2.49s`:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest mini_diffusion\tests\test_sit.py mini_diffusion\tests\test_evaluate_comparison.py -q
+.\.venv\Scripts\python.exe -m py_compile mini_diffusion\train_sit.py mini_diffusion\evaluate_comparison.py
+```
+
+No training, sampling, evaluation, benchmark, dataset/cache operation, checkpoint creation, or ledger event occurred.
+
+### Decision
+
+The only approved next operation is the manual 10k-to-20k command in `reports/afhq_cat_sit_b_128_repa_early_stop_readiness.md`. After it completes, inspect its checkpoints and logs before authorizing the unified quick-200 comparison.

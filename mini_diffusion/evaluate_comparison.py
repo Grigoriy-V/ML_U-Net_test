@@ -230,7 +230,7 @@ def main() -> None:
     for comparison in config["comparisons"]:
         left, right = variants[comparison["left"]], variants[comparison["right"]]
         paired_grid(left["images"], right["images"], output / "comparisons" / f"{comparison['id']}.png", f"{comparison['id']} | left then right within each pair | seeds 1000-1199")
-    changes = {comparison["id"]: delta(variants[comparison["left"]], variants[comparison["right"]]) for comparison in config["comparisons"][:4]}
+    changes = {comparison["id"]: delta(variants[comparison["left"]], variants[comparison["right"]]) for comparison in config["comparisons"]}
     for record in variants.values(): record.pop("images")
     git_commit = __import__("subprocess").check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     results = {"name": config["name"], "protocol": protocol, "dataset_fingerprint": None, "device": str(device), "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else None, "git_commit": git_commit, "duration_seconds": time.perf_counter() - started, "variants": variants, "rows": rows, "changes": changes, "checkpoint_unchanged": all(sha256(Path(value["checkpoint"])) == value["checkpoint_sha256"] for value in variants.values()), "deterministic_sampling": all(value["deterministic_probe"] for value in variants.values())}
