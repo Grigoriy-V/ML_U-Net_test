@@ -2,7 +2,7 @@
 
 **Обновлено:** 2026-07-18  
 **Главная цель:** через практические проекты выйти на уровень уверенного Applied AI / AI Engineer и собрать 1–3 кейса, которые можно показать работодателю.  
-**Канонический файл проекта:** `D:\ML\My_first_model\ROADMAP.md`.
+**Канонический файл проекта:** `D:\ML\My_first_model\ML_PROJECT_ROADMAP.md`.
 
 Этот документ — единственный источник актуального плана. Подробные результаты отдельных экспериментов остаются в `reports/` и `experiment_ledger`, но порядок работ, статусы и принятые решения меняются только здесь.
 
@@ -26,6 +26,7 @@ CIFAR-10 DDPM
 → REPA и Evaluator
 → AFHQ Cats SiT-B/2
 → REPA early-stop
+→ Portfolio Packaging & Repository Readiness
 → transfer Cat → all AFHQ
 → img2img
 → hires fix
@@ -91,7 +92,56 @@ CIFAR-10 DDPM
 
 ## 2. Текущий этап
 
-### 2.1 REPA early-stop: 10k REPA → 20k без REPA — ✅ завершён и зафиксирован
+### 2.1 Portfolio Packaging & Repository Readiness — 🟡 активный этап и обязательный gate
+
+**Решение:** обучение, evaluation и новое ML-исследование временно поставлены на паузу. До packaging closeout не запускать новые training/evaluation/ML research задачи, если пользователь явно не отменит этот gate. После closeout вернуться к `Cats → all AFHQ transfer`.
+
+**Позиционирование:** один интегрированный публичный кейс — **Human-in-the-Loop Generative ML Lab**. Он показывает связную систему из двух ясно разделённых, но связанных частей:
+
+1. практический путь generative ML: DDPM → latent SiT → evaluator → REPA/early-stop и честное сравнение;
+2. контролируемый human-supervised multi-agent workflow: supervisor задаёт границы и решения, worker выполняет ограниченную работу, long runs остаются ручными, а evidence и решения фиксируются в ledger.
+
+Это не два несвязанных проекта: orchestration обслуживает воспроизводимое исследование модели. При этом не делать завышенных production/MLOps заявлений: текущий процесс локальный, semi-automatic и human-gated.
+
+#### Deliverables: три уровня рассказа
+
+1. `README.md` — executive landing, 2–3 минуты: проблема, что построено и принято пользователем, измеримые результаты/ограничения, ссылка на доказательства и воспроизводимый вход.
+2. `docs/portfolio_case_study.md` — интегрированный короткий кейс, 5–7 минут: отдельные секции **ML outcomes** и **agent orchestration / pipeline**, объединённые общей задачей и результатом.
+3. `docs/technical_retrospective.md` — читаемая техническая ретроспектива, 8–12 минут, не research paper: путь обучения, сбои и решения, evaluator, REPA early-stop, воспроизводимость и agent workflow без копирования сырой хронологии ledger.
+
+`docs/agent_orchestration.md` остаётся подробной reference-документацией, а не вторым portfolio story.
+
+#### Visual package
+
+Цель: 4–6 осмысленных, читаемых на GitHub визуалов с caption и alt text; по возможности переиспользовать реальные артефакты, не cherry-pick-ить вводящие в заблуждение примеры.
+
+- timeline прогрессии модели и экспериментов;
+- компактный AFHQ comparison metric chart с видимым ограничением precision/recall;
+- representative fixed-seed generation/comparison grid;
+- diagram `human supervisor → worker → tests/eval → ledgers → decision`;
+- опционально компактная evidence/audit или repo-architecture графика — только если она добавляет новую информацию.
+
+#### Порядок работ
+
+A. Собрать inventory доказательств и claims из roadmap, reports, обоих ledger и существующих visual assets.
+B. Провести public-repo readiness audit: secrets, крупные tracked artifacts, dead links, reproducibility, environment/setup, license/data/checkpoint disclosure, generated-output policy и навигация.
+C. Сформировать information architecture/story outline и claim-to-evidence matrix.
+D. Выбрать или создать visuals.
+E. Переписать `README.md` и короткий case study.
+F. Написать technical retrospective.
+G. Провести независимый review с позиции Head of AI: link/render/claim checks.
+H. Принять packaging closeout decision, затем снять gate и вернуться к `Cats → all AFHQ transfer`.
+
+#### Критерии приёмки packaging closeout
+
+- Внешний читатель понимает проблему, что пользователь лично построил/решил, измеримые результаты, новизну orchestration, ограничения и следующие шаги без чтения reports.
+- Каждый количественный claim трассируется в report или ledger; completed work отделён от planned work, а user decisions — от agent execution.
+- Локальный semi-automatic human-gated характер обучения изложен честно; нет раздутых production/MLOps claims.
+- README краткий; visuals читаемы; нет broken links, secrets или крупных артефактов; documented reproducible entry points существуют.
+- Technical retrospective укладывается примерно в 8–12 минут чтения и не дублирует chronologically raw ledgers.
+- Репозиторий проходит final public-readiness checklist.
+
+### 2.2 REPA early-stop: 10k REPA → 20k без REPA — ✅ завершён и зафиксирован
 
 **Цель:** проверить, можно ли взять раннюю структурную пользу REPA, а затем дать модели свободно улучшать текстуры и мелкие детали.
 
@@ -111,7 +161,7 @@ CIFAR-10 DDPM
 
 Решение: по утверждённому supervisor решению текущий этап закрыт на evidence quick-200. Победитель — raw early-stop 20k: `outputs/afhq_cat_sit_b_128_repa_early_stop/checkpoints/best_raw_0020000.pt`, SHA-256 `300b5600b86d1a35ebf2c27307e480070cceee113735b23ffca8e46316e57bd0`; это hash-identical immutable copy `step_0020000.pt`. Он лидирует по FID `45.787` и KID `0.01692`. Baseline остаётся лучше по precision `0.340` против `0.280` и recall `0.754` против `0.732`; это зафиксированное ограничение выбора. Always-on REPA исключён из дальнейшего отбора. Full-1000 сознательно пропущен по решению supervisor; EMA не выбиралась.
 
-### 2.2 Зафиксировать финальную AFHQ Cats модель — ✅ завершено для текущего этапа
+### 2.3 Зафиксировать финальную AFHQ Cats модель — ✅ завершено для текущего ML-этапа
 
 - Canonical raw checkpoint: `outputs/afhq_cat_sit_b_128_repa_early_stop/checkpoints/best_raw_0020000.pt`.
 - Зафиксированы SHA-256, config, quick-200 metrics и fixed-seed comparison grids в отчёте и experiment ledger.
@@ -119,7 +169,7 @@ CIFAR-10 DDPM
 
 ## 3. Ближайшие следующие этапы
 
-### 3.1 Transfer learning: Cats → все классы AFHQ — 🟡 следующий утверждённый шаг
+### 3.1 Transfer learning: Cats → все классы AFHQ — ⏸ следующий ML-шаг после packaging closeout
 
 **Цель:** проверить полезность дообучения собственной модели на новом распределении, а не всегда начинать с нуля.
 
@@ -292,19 +342,21 @@ Training evaluator плюс production-oriented QA/Inspector с автомати
 
 ## 10. Точный порядок ближайших действий
 
-1. Исправить мелкий пропуск `raw vs EMA delta` в comparison report, если он ещё не исправлен.
-2. Запустить ветку `REPA 10k → REPA OFF → 20k`.
-3. Quick-200: baseline 20k vs always-on REPA 20k vs early-stop REPA 20k.
-4. Выбрать и заморозить финальный AFHQ Cats checkpoint.
-5. При явном победителе провести full-1000 только для финального подтверждения.
-6. Начать transfer Cat → all AFHQ classes.
-7. Реализовать img2img.
-8. Реализовать hires fix около 192–256 px.
-9. Сформировать Training & Evaluation Playbook v1.
-10. Превратить стабильные операции в agent skills/pipeline.
-11. Перейти к RAE 128.
-12. После этого решить вопрос native 256 и/или облака.
-13. Собрать Generated Image Inspector как отдельный Applied AI продукт.
+1. ✅ Завершить early-stop `REPA 10k → OFF → 20k`, quick-200 comparison и freeze raw checkpoint; full-1000 сознательно не запускался.
+2. Провести evidence/claim inventory и public-repo readiness audit для `Human-in-the-Loop Generative ML Lab`.
+3. Сформировать information architecture, claim-to-evidence matrix и visual package.
+4. Подготовить executive `README.md` и `docs/portfolio_case_study.md`.
+5. Подготовить `docs/technical_retrospective.md` и проверить readability без дублирования raw ledgers.
+6. Провести независимый Head-of-AI review, link/render/claim checks и final public-readiness checklist.
+7. Принять packaging closeout; до него не запускать новые ML training/evaluation/research операции без явного решения пользователя.
+8. После closeout начать transfer Cat → all AFHQ classes.
+9. Реализовать img2img.
+10. Реализовать hires fix около 192–256 px.
+11. Сформировать Training & Evaluation Playbook v1.
+12. Превратить стабильные операции в agent skills/pipeline.
+13. Перейти к RAE 128.
+14. После этого решить вопрос native 256 и/или облака.
+15. Собрать Generated Image Inspector как отдельный Applied AI продукт.
 
 ## Как обновлять этот файл
 
