@@ -10,7 +10,7 @@ The human defined the learning goals, approved scope and model decisions, and ma
 
 Two connected pillars make up the case study.
 
-1. **Generative ML:** class-conditioned DDPM/U-Net work progressed to latent SiT flow models, a fixed-protocol evaluator, representation-alignment (REPA) experiments, and a bounded AFHQ Cats model-selection decision.
+1. **Generative ML:** class-conditioned DDPM/U-Net work progressed to SiT (a transformer-based latent flow model), a fixed-protocol evaluator, REPA (a frozen-teacher representation-alignment auxiliary loss), and a bounded AFHQ Cats model-selection decision.
 2. **Human-supervised orchestration:** a supervisor defines scope and makes final decisions; workers execute narrowly bounded tasks; long GPU runs remain manual; separate append-only ledgers record ML operations and agent execution.
 
 ## Selected result: AFHQ Cats
@@ -27,11 +27,13 @@ For a fixed held-out AFHQ Cats **quick-200** comparison (200 seeds `1000–1199`
 
 Early-stop improves FID by 4.71% and KID by 17.53% versus the baseline in this protocol, but the baseline remains stronger on precision and recall. This is a bounded selection decision—not a universal winner, statistical-significance claim, or full evaluation: **full-1000 was deliberately not run**. Read the [result report](reports/afhq_cat_sit_b_128_repa_early_stop_results.md) and [claim-to-evidence matrix](reports/portfolio_claim_evidence_matrix.md).
 
-![Fixed-seed AFHQ Cats comparison: baseline, always-on REPA, and early-stop REPA](docs/assets/portfolio_afhq_fixed_seed_comparison.png)
+![Illustrative eight-seed AFHQ Cats grid: baseline, always-on REPA, and early-stop REPA; selection used quick-200 metrics](docs/assets/portfolio_afhq_fixed_seed_comparison.png)
+
+The eight-seed grid is illustrative; model selection used the quick-200 metrics above, not this grid.
 
 ## Engineering highlights
 
-- A CIFAR-10 DDPM baseline completed 200k steps; under its fixed benchmark protocol, an optimized path reached **2,272.92 images/s** versus **1,787.57 images/s** historically (+27.15%). This is a local benchmark result, not a production-performance claim. [Evidence](reports/cifar10_optimization_report.md)
+- A CIFAR-10 DDPM baseline completed 200k steps. Under the fixed local benchmark, the five-run optimized median reached **2,272.92 images/s** versus the single historical **1,787.57** result (+27.15%); a repeated three-run A0 control measured **1,812.39 images/s** median (+25.41%). This is not a production-performance claim. [Evidence](reports/cifar10_optimization_report.md)
 - The evaluator fixes seeds, sampler, CFG, VAE, reference split, and feature extractor; it reports FID, KID, precision, recall, and failure diagnostics. [Evaluator setup](reports/imagenette_sit_evaluator_setup.md)
 - Checkpoint hashes, deterministic sampling checks, configuration snapshots, and decisions are preserved in compact reports and append-only ledgers. [Experiment ledger](reports/experiment_ledger.jsonl)
 

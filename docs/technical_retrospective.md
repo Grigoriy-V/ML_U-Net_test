@@ -52,7 +52,9 @@ The caveat is part of the decision, not a footnote: baseline remained better in 
 
 ![AFHQ Cats metrics under the fixed quick-200 protocol](assets/portfolio_afhq_metrics.svg)
 
-![Fixed-seed AFHQ Cats samples for baseline, always-on REPA, and early-stop REPA](assets/portfolio_afhq_fixed_seed_comparison.png)
+![Illustrative eight-seed AFHQ Cats grid for baseline, always-on REPA, and early-stop REPA; selection used quick-200 metrics](assets/portfolio_afhq_fixed_seed_comparison.png)
+
+This eight-seed grid is illustrative. The selection decision came from the quick-200 metric protocol, not from choosing among these displayed samples.
 
 Raw-versus-EMA was another decision rather than a default. EMA often improves sampling once its moving average represents a useful region of training, but the AFHQ reports show that the available EMA variants lagged the raw checkpoints. Early training history can make EMA slow to reflect a rapidly improving model. The project therefore evaluated and reported weight choice instead of assuming that “EMA is always better”; raw 20k became canonical for this stage.
 

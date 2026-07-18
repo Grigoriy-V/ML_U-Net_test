@@ -23,9 +23,9 @@ The project moved through four deliberate stages:
 3. Latent SiT-S/2 on Imagenette provided a controlled baseline-to-REPA comparison. Under a fixed 1,000-sample EMA Heun-50 protocol, REPA at 350k outperformed the 100k baseline on FID (130.96 vs 149.95), KID (0.05199 vs 0.06103), accuracy (29.5% vs 26.9%), and recall (72.1% vs 51.0%), while precision was slightly lower (23.9% vs 24.6%). It is a **cross-step** result; it does not prove faster convergence or a same-step win. [Evaluator report](../reports/imagenette_sit_evaluator_setup.md)
 4. AFHQ Cats SiT-B/2 made the trade-off concrete. In the held-out, fixed quick-200 comparison (seeds 1000–1199, Heun-50, CFG 1.0), early-stop REPA raw 20k had the best FID/KID: 45.787/0.01692, versus baseline 48.051/0.02052 and always-on REPA 52.384/0.02531. [Result report](../reports/afhq_cat_sit_b_128_repa_early_stop_results.md)
 
-![Fixed-seed AFHQ Cats comparison of baseline, always-on REPA, and early-stop REPA](assets/portfolio_afhq_fixed_seed_comparison.png)
+![Illustrative eight-seed AFHQ Cats grid of baseline, always-on REPA, and early-stop REPA; selection used quick-200 metrics](assets/portfolio_afhq_fixed_seed_comparison.png)
 
-The AFHQ decision is intentionally narrow. The baseline still has higher precision (0.340 vs 0.280) and recall (0.754 vs 0.732); full-1000 was deliberately skipped; the repeated quick run used the same seeds and is not an independent replicate. The selected checkpoint is therefore the winner for this bounded decision, not an overall or statistically significant best model.
+The grid shows eight fixed seeds for illustration; selection used the quick-200 metrics, not this grid. The AFHQ decision is intentionally narrow. The baseline still has higher precision (0.340 vs 0.280) and recall (0.754 vs 0.732); full-1000 was deliberately skipped; the repeated quick run used the same seeds and is not an independent replicate. The selected checkpoint is therefore the winner for this bounded decision, not an overall or statistically significant best model.
 
 Several stops matter as much as the successful runs. The black/white CIFAR samples triggered a sampler investigation rather than being hidden behind a better-looking grid. Tiny ImageNet was stopped part-way through instead of consuming more compute without a sufficiently valuable next question. On AFHQ, always-on REPA was removed from finalist consideration because the unified comparison did not support it, even though REPA had looked useful in the earlier Imagenette stage. These choices show the core practice: a learning project still needs explicit criteria for when evidence justifies more work.
 
@@ -59,7 +59,7 @@ The two-ledger design is equally deliberate. The experiment ledger answers what 
 
 ## Operational observation, not a result
 
-After preliminary routing/orchestration setup, the account usage view appeared to show roughly **5× lower** token consumption. This is an anecdotal, directional observation only: there is no instrumented before/after benchmark, causal analysis, or per-agent telemetry. The next step is to collect raw input/output/reasoning/cached-token counters, model/profile, task IDs, and matched workload windows before making any efficiency claim. [Evidence boundary](../reports/portfolio_claim_evidence_matrix.md)
+After preliminary routing/orchestration setup, the account usage view appeared to show roughly **5× lower** token consumption. This is a user-reported, anecdotal, directional observation—not an instrumented benchmark or causal saving claim. Telemetry is the next step. [Evidence boundary](../reports/portfolio_claim_evidence_matrix.md)
 
 ## Impact and next steps
 
