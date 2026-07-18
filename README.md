@@ -1,270 +1,63 @@
-# Mini Diffusion
+# Human-in-the-Loop Generative ML Lab
 
-Educational class-conditioned DDPM in plain PyTorch. The first target is a fast CIFAR-10 32x32 debug pipeline; the same code also has Tiny ImageNet 64x64 configs.
+An evidence-led learning project that grew from a PyTorch DDPM into a latent diffusion/flow workflow with controlled agent assistance. The point is not to claim a production platform: it is to show how model work, evaluation discipline, and human-supervised orchestration can reinforce one another.
 
-Run every command below from:
+The human defined the learning goals, approved scope and model decisions, and manually gated long training/evaluation. Agents performed bounded implementation, investigation, validation, and documentation tasks under an append-only audit trail.
 
-```powershell
-cd D:\ML\My_first_model
-```
+![Portfolio progression from DDPM to AFHQ evaluation](docs/assets/portfolio_ml_progression.svg)
 
-## Environment
+## What was built
 
-Use Python 3.12 on Windows for the local virtual environment. The system Python in this workspace is 3.14, but PyTorch CUDA wheels are more reliably available for 3.12.
+Two connected pillars make up the case study.
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
-.\.venv\Scripts\python.exe -m pip install numpy Pillow PyYAML tqdm tensorboard pytest
-```
+1. **Generative ML:** class-conditioned DDPM/U-Net work progressed to latent SiT flow models, a fixed-protocol evaluator, representation-alignment (REPA) experiments, and a bounded AFHQ Cats model-selection decision.
+2. **Human-supervised orchestration:** a supervisor defines scope and makes final decisions; workers execute narrowly bounded tasks; long GPU runs remain manual; separate append-only ledgers record ML operations and agent execution.
 
-If the CUDA wheel is not available, install the current wheel recommended at https://pytorch.org/get-started/locally/ and rerun the checks.
+The orchestration is there to make the research process more inspectable, not to replace technical judgment or autonomously train models.
 
-## What The Model Does
+## Selected result: AFHQ Cats
 
-Forward diffusion adds Gaussian noise to an image at a randomly selected timestep. The U-Net receives the noisy image, timestep embedding, and optional class embedding, then predicts the exact noise that was added. Reverse diffusion starts from Gaussian noise and repeatedly removes predicted noise to form an image.
+For a fixed held-out AFHQ Cats **quick-200** comparison (200 seeds `1000–1199`, Heun-50, CFG 1.0), the raw early-stop REPA 20k checkpoint was selected on FID/KID. It used REPA through 10k steps, then continued to 20k without it.
 
-Class conditioning is done with a learned class embedding added to the timestep embedding. Classifier-free guidance uses a learned null class token during training and sampling. EMA keeps a smoothed copy of model weights, which is usually better for sampling than the raw training weights.
+| Raw 20k variant | FID ↓ | KID ↓ | Precision ↑ | Recall ↑ |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 48.051 | 0.02052 | **0.340** | **0.754** |
+| Always-on REPA | 52.384 | 0.02531 | 0.310 | 0.722 |
+| Early-stop REPA | **45.787** | **0.01692** | 0.280 | 0.732 |
 
-## Tests And Smoke Checks
+![AFHQ Cats quick-200 metric comparison](docs/assets/portfolio_afhq_metrics.svg)
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest mini_diffusion\tests
-```
+Early-stop improves FID by 4.71% and KID by 17.53% versus the baseline in this protocol, but the baseline remains stronger on precision and recall. This is a bounded selection decision—not a universal winner, statistical-significance claim, or full evaluation: **full-1000 was deliberately not run**. Read the [result report](reports/afhq_cat_sit_b_128_repa_early_stop_results.md) and [claim-to-evidence matrix](reports/portfolio_claim_evidence_matrix.md).
 
-One-batch overfit smoke test on CIFAR-10:
+![Fixed-seed AFHQ Cats comparison: baseline, always-on REPA, and early-stop REPA](docs/assets/portfolio_afhq_fixed_seed_comparison.png)
 
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\train.py --config mini_diffusion\configs\cifar10_debug.yaml --overfit-smoke --overfit-updates 40
-```
+## Engineering highlights
 
-This reuses one batch for repeated updates and fails if the loss does not noticeably decrease. `cifar10_debug.yaml` uses `fake_data: true` by default so this runtime check does not depend on CIFAR-10 network download speed; set it to `false` after CIFAR-10 is downloaded to run the same debug path on real CIFAR-10.
+- A CIFAR-10 DDPM baseline completed 200k steps; under its fixed benchmark protocol, an optimized path reached **2,272.92 images/s** versus **1,787.57 images/s** historically (+27.15%). This is a local benchmark result, not a production-performance claim. [Evidence](reports/cifar10_optimization_report.md)
+- The evaluator fixes seeds, sampler, CFG, VAE, reference split, and feature extractor; it reports FID, KID, precision, recall, and failure diagnostics. [Evaluator setup](reports/imagenette_sit_evaluator_setup.md)
+- Checkpoint hashes, deterministic sampling checks, configuration snapshots, and decisions are preserved in compact reports and append-only ledgers. [Experiment ledger](reports/experiment_ledger.jsonl)
 
-The CIFAR configs use a public mirror for `cifar-10-python.tar.gz` because the default Toronto host can be very slow from this workspace. Remove `mirror_url` from the YAML files to use the torchvision default.
+![Human-supervised agent pipeline](docs/assets/portfolio_agent_pipeline.svg)
 
-## CIFAR-10 Debug Pipeline
+## Read the story at the right depth
 
-Train for a few steps:
+- [Portfolio case study](docs/portfolio_case_study.md) — the integrated 5–7 minute narrative.
+- [Technical retrospective](docs/technical_retrospective.md) — design choices, failures, and lessons.
+- [Agent orchestration reference](docs/agent_orchestration.md) — roles, controls, and audit lifecycle.
+- [Reproducibility guide](docs/reproducibility.md) — supported evidence, a cheap inspection path, and explicit limits.
+- [Operations guide](docs/operations_guide.md) — historical Windows-oriented commands; it is not a portability promise.
 
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\train.py --config mini_diffusion\configs\cifar10_debug.yaml
-```
+## Evidence map
 
-Resume from the checkpoint:
+| Question | Compact evidence |
+| --- | --- |
+| Why early-stop REPA was selected | [AFHQ result report](reports/afhq_cat_sit_b_128_repa_early_stop_results.md) → [evaluation config](mini_diffusion/configs/evaluation/afhq_cat_baseline_repa_early_stop_20k.yaml) → experiment event `afhq-cats-repa-early-stop-20k-freeze-closeout-20260718` |
+| What claims are safe | [Claim-to-evidence matrix](reports/portfolio_claim_evidence_matrix.md) |
+| How experiments evolved | [Project log](PROJECT_LOG.md) and [roadmap](ML_PROJECT_ROADMAP.md) |
+| How agents were controlled | [Orchestration policy](docs/agent_orchestration.md) and [agent execution ledger](reports/agent_execution_ledger.jsonl) |
 
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\train.py --config mini_diffusion\configs\cifar10_debug.yaml --resume outputs\cifar10_debug\checkpoints\latest.pt
-```
+## Scope and availability
 
-To force additional debug steps after the checkpoint already reached the config default:
+This repository tracks code, compact reports, configurations, hashes, and selected small visuals. Datasets, checkpoints, latent/feature caches, TensorBoard logs, and full evaluation outputs are intentionally ignored; reports point to their local paths and hashes where relevant. The observed environment is Windows with Python 3.12 and an RTX 4090, but dependencies are not fully pinned and no cross-platform or cloud claim is made.
 
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\train.py --config mini_diffusion\configs\cifar10_debug.yaml --resume outputs\cifar10_debug\checkpoints\latest.pt --max-steps 6
-```
-
-Generate a PNG grid:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\sample.py --checkpoint outputs\cifar10_debug\checkpoints\latest.pt --classes 0 1 2 3 --seeds 10 20 30 40 --guidance-scale 1.5 --output outputs\samples\cifar10_debug
-```
-
-Sampling uses a dedicated generator for each seed, FP32 reverse steps, and EMA weights by default. DDPM remains the default final-evaluation sampler. A deterministic DDIM path is available for fast previews:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\sample.py --checkpoint outputs\cifar10\checkpoints\latest.pt --classes 0 1 2 3 --seeds 10 20 30 40 --guidance-scale 1.5 --sampler ddim --ddim-steps 50 --output outputs\samples\cifar10_ddim50
-```
-
-Use `--weights raw` for unsmoothed weights or `--sampling-diagnostics` to print min/max/mean/std, finite status, saturation rate, and black/white failure counts.
-
-Outputs:
-
-- checkpoints: `outputs\<run_name>\checkpoints\latest.pt`
-- TensorBoard logs: `outputs\<run_name>\logs`
-- training sample grids: `outputs\<run_name>\samples`
-- CLI sample grids: `outputs\samples\...`
-
-## CIFAR-10 Full Run
-
-Recommended first full run on RTX 4090:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\train.py --config mini_diffusion\configs\cifar10.yaml
-```
-
-The full config uses about 27M trainable parameters, cosine noise schedule, BF16 autocast when available, EMA, batch size 128, and attention at 8x8.
-
-## CIFAR-10 Baseline
-
-The completed 200,000-step baseline, deterministic raw/EMA sampling comparison, isolated resume check, and pre-optimization benchmark are documented in:
-
-- `reports/cifar10_baseline.md`
-- `reports/cifar10_baseline_config.yaml`
-- `reports/cifar10_baseline_benchmark.json`
-
-Run the benchmark without sampling, checkpoints, or TensorBoard:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\benchmark.py --config mini_diffusion\configs\cifar10.yaml --warmup-steps 20 --steps 200 --output reports\cifar10_baseline_benchmark.json
-```
-
-## CIFAR-10 Optimized Run
-
-The baseline-semantics optimized config keeps batch size 128, learning rate, model, objective, schedule, EMA decay, and 200,000-step budget unchanged:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\train.py --config mini_diffusion\configs\cifar10_optimized.yaml
-```
-
-It enables persistent Windows workers, pinned non-blocking transfer, fused AdamW with fallback, foreach EMA, cuDNN autotuning, scalar logging every 50 steps, and DDIM-50 periodic previews. Five benchmark runs reached median `2272.92 images/s`, 27.15% above the historical baseline. cuDNN autotuning adds a one-time startup cost of roughly 30-35 seconds on this machine.
-
-Reproduce the final benchmark and regenerate its summary:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\benchmark.py --config mini_diffusion\configs\cifar10_optimized.yaml --experiment-id FINAL_OPTIMIZED --runs 5 --warmup-steps 30 --steps 200 --log reports\performance_experiments.jsonl
-.\.venv\Scripts\python.exe mini_diffusion\summarize_performance.py
-```
-
-Detailed results and accepted/rejected experiments are in `reports/cifar10_optimization_report.md`.
-
-## Tiny ImageNet
-
-The dataset is not downloaded automatically. Download the 248.1 MB archive from
-[Zenodo](https://zenodo.org/records/10720917/files/tiny-imagenet-200.zip?download=1),
-then verify and unpack it from the repository root:
-
-```powershell
-Invoke-WebRequest -Uri "https://zenodo.org/records/10720917/files/tiny-imagenet-200.zip?download=1" -OutFile datasets\tiny-imagenet-200.zip
-Get-FileHash datasets\tiny-imagenet-200.zip -Algorithm MD5
-Expand-Archive -LiteralPath datasets\tiny-imagenet-200.zip -DestinationPath datasets
-```
-
-The expected MD5 is `90528d7ca1a48142e341f4ef8d21d0de`. The extracted root must be:
-
-```text
-datasets/tiny-imagenet-200/
-```
-
-The loader expects the original structure:
-
-```text
-train/<wnid>/images/
-val/images/
-val/val_annotations.txt
-wnids.txt
-words.txt
-```
-
-Validate image counts, class balance, annotations, decoding, tensor shape, and normalization before training:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\validate_tiny_imagenet.py
-```
-
-Tiny ImageNet debug:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\train.py --config mini_diffusion\configs\tiny_imagenet_debug.yaml
-```
-
-Tiny ImageNet full run:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\train.py --config mini_diffusion\configs\tiny_imagenet.yaml
-```
-
-The full Tiny ImageNet config uses about 48M trainable parameters and targets 64x64 images, 200 classes, BF16, EMA, gradient accumulation, and attention at 16x16 and 8x8.
-
-On the RTX 4090, physical batch 128 fits in VRAM but was slightly slower in the synthetic compute probe and used roughly twice the peak memory of batch 64 with two accumulation steps. The first full-run config therefore uses `batch_size: 64` and `grad_accum_steps: 2`, preserving effective batch 128 with more memory headroom. Re-benchmark the real JPEG loader after extraction before changing workers or physical batch size. Detailed readiness results are in `reports/tiny_imagenet_readiness.md`.
-
-Synthetic preflight is available without the archive. It verifies the full model/optimizer/EMA training path but does not validate JPEG decoding or loader throughput:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\benchmark.py --config mini_diffusion\configs\tiny_imagenet.yaml --experiment-id TINY_SYNTHETIC_64X2 --warmup-steps 2 --steps 6 --set data.fake_data=true --set data.fake_size=512 --log reports\tiny_imagenet_experiments.jsonl
-.\.venv\Scripts\python.exe mini_diffusion\benchmark.py --config mini_diffusion\configs\tiny_imagenet.yaml --experiment-id TINY_SYNTHETIC_128X1 --warmup-steps 2 --steps 6 --set data.fake_data=true --set data.fake_size=512 --set data.batch_size=128 --set train.grad_accum_steps=1 --log reports\tiny_imagenet_experiments.jsonl
-```
-
-## Notes
-
-- Debug configs use `num_workers: 0` for Windows-safe DataLoader startup.
-- All executable scripts use `if __name__ == "__main__": main()`.
-- Checkpoints, datasets, logs, and samples are ignored by git.
-- DDPM and deterministic DDIM sampling are both implemented; `--ddim-steps` is used only with `--sampler ddim`.
-
-## Imagenette Latent SiT-S/2
-
-The latent baseline is isolated from the DDPM/U-Net path. It uses Imagenette-160 at 128x128, the frozen `stabilityai/sd-vae-ft-mse` VAE, a deterministic `[4, 16, 16]` float16 latent cache, and a 32,527,888-parameter class-conditioned SiT-S/2 velocity model. The VAE scaling factor is read from its configuration and recorded in every cache; it is not loaded by `train_sit.py`.
-
-Prepare Imagenette (the CLI downloads the official fast.ai archive if needed), write a small debug cache, and create the validation reconstruction grid:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install diffusers huggingface_hub safetensors
-.\.venv\Scripts\python.exe mini_diffusion\prepare_latents.py --config mini_diffusion\configs\imagenette_sit_s_128_debug.yaml --limit 32 --download-dataset
-```
-
-Run the CUDA/BF16 debug chain, then resume it:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\train_sit.py --config mini_diffusion\configs\imagenette_sit_s_128_debug.yaml
-.\.venv\Scripts\python.exe mini_diffusion\train_sit.py --config mini_diffusion\configs\imagenette_sit_s_128_debug.yaml --resume outputs\imagenette_sit_s_128_debug\checkpoints\latest.pt --max-steps 20
-.\.venv\Scripts\python.exe mini_diffusion\train_sit.py --config mini_diffusion\configs\imagenette_sit_s_128_debug.yaml --overfit-smoke --overfit-updates 40
-```
-
-Generate decoded samples. `euler` and `heun` are both live ODE samplers; `heun` is the default.
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\sample_sit.py --checkpoint outputs\imagenette_sit_s_128_debug\checkpoints\latest.pt --weights raw --classes 0 1 2 3 --seeds 10 20 30 40 --sampler euler --steps 5 --output outputs\imagenette_sit_s_128_debug\samples_raw
-.\.venv\Scripts\python.exe mini_diffusion\sample_sit.py --checkpoint outputs\imagenette_sit_s_128_debug\checkpoints\latest.pt --weights ema --classes 0 1 2 3 --seeds 10 20 30 40 --sampler heun --steps 5 --output outputs\imagenette_sit_s_128_debug\samples_ema
-```
-
-Benchmark the full SiT configuration before a future full training run:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\benchmark_sit.py --config mini_diffusion\configs\imagenette_sit_s_128.yaml --output reports\imagenette_sit_benchmark.json
-```
-
-The tested candidates selected physical batch `256` (no accumulation) on this RTX 4090. `sampling.preview_decode: true` writes an EMA-decoded PNG alongside each periodic latent preview; the frozen VAE is loaded only during this preview step and is never optimized. Do not interpret the debug training as a trained generative model: full Imagenette training has intentionally not been started.
-
-## Imagenette SiT-S/2 + REPA
-
-REPA is a separate from-scratch experiment. It never initializes from the frozen 100k baseline and writes only to `outputs\imagenette_sit_s_128_repa`. A frozen official [DINOv2 ViT-B/14](https://github.com/facebookresearch/dinov2) teacher is used only to create a memory-mapped FP16 cache; training and `sample_sit.py` do not load DINOv2.
-
-Create the full teacher-feature cache once. It matches cached samples by relative path and label, applies the same deterministic 128px crop, then resizes to 224px and pools DINO patch features from 16x16 to the SiT 8x8 token grid:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\prepare_repa_features.py --config mini_diffusion\configs\imagenette_sit_s_128_repa.yaml --split train
-```
-
-The debug chain uses a separate 64-sample cache and Windows-safe `num_workers: 0`:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\prepare_repa_features.py --config mini_diffusion\configs\imagenette_sit_s_128_repa_debug.yaml --split train --limit 64
-.\.venv\Scripts\python.exe mini_diffusion\train_sit.py --config mini_diffusion\configs\imagenette_sit_s_128_repa_debug.yaml
-.\.venv\Scripts\python.exe mini_diffusion\train_sit.py --config mini_diffusion\configs\imagenette_sit_s_128_repa_debug.yaml --resume outputs\imagenette_sit_s_128_repa_debug\checkpoints\latest.pt --max-steps 15
-```
-
-Run the prepared future experiment from scratch only after the feature cache is present. This is the exact 0-to-100k command; it is not run by setup or test commands:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\train_sit.py --config mini_diffusion\configs\imagenette_sit_s_128_repa.yaml
-```
-
-Benchmark baseline and cached REPA without writing a training checkpoint:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\benchmark_repa.py --config mini_diffusion\configs\imagenette_sit_s_128_repa.yaml --mode baseline --warmup 10 --steps 50 --output reports\repa_benchmark_baseline.json
-.\.venv\Scripts\python.exe mini_diffusion\benchmark_repa.py --config mini_diffusion\configs\imagenette_sit_s_128_repa.yaml --mode repa --warmup 10 --steps 50 --output reports\repa_benchmark_repa.json
-```
-
-## AFHQ Cats SiT-B/2
-
-The one-class AFHQ Cats experiment is isolated at `outputs\afhq_cat_sit_b_128`, does not use REPA, and trains a 129,929,488-parameter SiT-B/2 latent model. Download the official AFHQ archive from [clovaai/stargan-v2](https://github.com/clovaai/stargan-v2#animal-faces-hq-dataset-afhq), respect its CC BY-NC 4.0 license, and extract `train\cat` plus `test\cat` (or official held-out `val\cat`) under `datasets\afhq`.
-
-Prepare the deterministic four-variant train cache and the held-out test cache, then begin the first bounded run:
-
-```powershell
-.\.venv\Scripts\python.exe mini_diffusion\prepare_afhq_cat_latents.py --config mini_diffusion\configs\afhq_cat_sit_b_128.yaml
-.\.venv\Scripts\python.exe mini_diffusion\train_sit.py --config mini_diffusion\configs\afhq_cat_sit_b_128.yaml --max-steps 10000
-```
-
-The selected configuration uses physical batch 128 with two accumulation steps (effective batch 256). It writes raw and EMA fixed-noise previews for CFG 1.0 and 1.5 every 5k steps. Full setup, smoke commands, benchmark, and held-out evaluator commands are in `reports/afhq_cat_sit_b_128_setup.md`.
+Training and evaluation can be expensive and are human-gated. Start with the [reproducibility guide](docs/reproducibility.md), not a long-run command. A code license and consolidated third-party attribution policy are still pending before a public release.
