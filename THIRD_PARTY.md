@@ -2,7 +2,7 @@
 
 This repository does **not** distribute third-party datasets, model weights, cached latents/features, checkpoints, or full evaluation outputs. Downloaded materials stay outside version control. This file records the material dependencies evidenced by the project configuration and reports; it is not legal advice. Check the current upstream terms and your intended use before downloading, training, publishing outputs, or redistributing anything.
 
-The project code license is pending. Nothing in this document grants a license to this repository's code or relicenses any third-party material.
+Repository-owned code is licensed under the MIT License via [LICENSE](LICENSE). Third-party datasets, models, and checkpoints are not relicensed by this repository and remain under their own terms. No dataset or checkpoint is distributed here.
 
 ## Datasets
 
