@@ -1,6 +1,6 @@
 # AFHQ Cats SiT-B/2 REPA Early-Stop: 20k Results
 
-Date: 2026-07-18. Scope: approved `REPA 10k -> REPA OFF -> 20k` fork and one unified raw quick-200 comparison.
+Date: 2026-07-18. Scope: approved `REPA 10k -> REPA OFF -> 20k` fork and unified raw quick-200 comparison.
 
 ## Training milestone verified from artifacts
 
@@ -28,7 +28,7 @@ Command actually run:
 .\.venv\Scripts\python.exe mini_diffusion\evaluate_comparison.py --config mini_diffusion\configs\evaluation\afhq_cat_baseline_repa_early_stop_20k.yaml
 ```
 
-Protocol: official held-out AFHQ Cats test split, 200 fixed seeds (`1000-1199`), class 0, Heun-50, CFG 1.0, shared VAE/Inception features. Runtime: 69.64 s on NVIDIA GeForce RTX 4090 with BF16 and sample batch 20.
+Protocol: official held-out AFHQ Cats test split, 200 fixed seeds (`1000-1199`), class 0, Heun-50, CFG 1.0, shared VAE/Inception features. The evaluator actually completed twice: canonical event `afhq-cats-baseline-vs-repa-quick-10k-20k-20260718-3` at `2026-07-18T14:46:11.047434Z` (69.637512 s), then redundant verification event `afhq-cats-baseline-vs-repa-quick-10k-20k-20260718-4` at `2026-07-18T14:47:03.475555Z` (69.857339 s). The second run used the same seeds and protocol; it is not an independent statistical replicate. Its complete stored metric and change values are identical to the canonical event, and both runs recorded unchanged hashes for all three checkpoints.
 
 | Raw 20k variant | FID | KID | Precision | Recall | Finite / black-white failures | Duplicate pairs |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -36,7 +36,7 @@ Protocol: official held-out AFHQ Cats test split, 200 fixed seeds (`1000-1199`),
 | Always-on REPA | 52.384 | 0.02531 | 0.310 | 0.722 | 0 / 0 | 0 |
 | Early-stop REPA | 45.787 | 0.01692 | 0.280 | 0.732 | 0 / 0 | 0 |
 
-Early-stop versus baseline: FID `-2.264` (`-4.71%`), KID `-0.003596` (`-17.53%`), precision `-0.060` (`-17.65%`), recall `-0.022` (`-2.92%`). Early-stop versus always-on REPA: FID `-6.597` (`-12.59%`), KID `-0.008384` (`-33.13%`), precision `-0.030` (`-9.68%`), recall `+0.010` (`+1.39%`). All checkpoints were hash-checked before and after evaluation; fixed-seed one-image probes were bitwise deterministic.
+Early-stop versus baseline: FID `-2.264` (`-4.71%`), KID `-0.003596` (`-17.53%`), precision `-0.060` (`-17.65%`), recall `-0.022` (`-2.92%`). Early-stop versus always-on REPA: FID `-6.597` (`-12.59%`), KID `-0.008384` (`-33.13%`), precision `-0.030` (`-9.68%`), recall `+0.010` (`+1.39%`). All checkpoints were hash-checked before and after each evaluation; fixed-seed one-image probes were bitwise deterministic.
 
 Artifacts: `evaluation/afhq_cat_baseline_repa_early_stop_20k/comparison.json`, `metrics.csv`, `report.md`, `grids/`, `comparisons/`, and `nearest_neighbors/`.
 
