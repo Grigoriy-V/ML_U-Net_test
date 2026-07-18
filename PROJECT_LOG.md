@@ -540,3 +540,23 @@ Use a newly loaded custom Luna profile with `none`; until it is available, route
 ### Ledger correction
 
 The Luna availability events were incorrectly rewritten to `not_applicable` after the ledger schema rejected the valid Luna reasoning value `none`. The original JSONL lines remain preserved; the schema now allows `none`, and append-only correction events define their actual requested reasoning as `none`.
+
+## 2026-07-18: AFHQ Cats REPA Early-Stop 20k and Unified Quick-200
+
+### Goal
+
+Verify the human-run `REPA 10k -> REPA OFF -> 20k` fork and compare its raw 20k checkpoint against the frozen baseline raw 20k and always-on REPA raw 20k under one fixed quick-200 protocol.
+
+### Outcome
+
+The manual training lineage produced isolated finite checkpoints at 15k and 20k plus `latest.pt`; the 20k raw checkpoint hash is `300b5600b86d1a35ebf2c27307e480070cceee113735b23ffca8e46316e57bd0`. Its checkpoint metadata records `global_step=20000`, the same AFHQ latent-cache fingerprint as the approved REPA 10k source, no REPA/projector state, and finite raw/EMA weights. The approved manual command is recorded as user-reported; training runtime and console telemetry were not retained.
+
+```powershell
+.\.venv\Scripts\python.exe mini_diffusion\evaluate_comparison.py --config mini_diffusion\configs\evaluation\afhq_cat_baseline_repa_early_stop_20k.yaml
+```
+
+The held-out AFHQ Cats quick-200 protocol (seeds 1000-1199, Heun-50, CFG 1.0) gave: baseline raw 20k FID `48.051`, KID `0.02052`, precision `0.340`, recall `0.754`; always-on REPA raw 20k `52.384`, `0.02531`, `0.310`, `0.722`; early-stop raw 20k `45.787`, `0.01692`, `0.280`, `0.732`. Early-stop improved FID/KID over both alternatives, but lost precision `0.060` and recall `0.022` against baseline. All three variants had zero pixel finite/black-white failures, low-detail warnings, and feature duplicate pairs; fixed-seed probes were deterministic and all checkpoint SHA-256 values were unchanged.
+
+### Decision
+
+Record early-stop as a plausible quality finalist because its FID/KID advantage is material, but do not freeze a checkpoint or start full-1000 until the supervisor decides whether the precision/recall trade-off is sufficiently clear. No training, resume, full-1000, sampler ablation, or CFG sweep was run by this milestone.

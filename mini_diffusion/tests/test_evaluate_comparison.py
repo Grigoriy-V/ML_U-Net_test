@@ -1,4 +1,6 @@
-from mini_diffusion.evaluate_comparison import delta, failure_count, finite_state, write_markdown
+import pytest
+
+from mini_diffusion.evaluate_comparison import delta, failure_count, finite_state, reference_variant_id, write_markdown
 
 
 def test_comparison_delta_and_failures() -> None:
@@ -15,6 +17,13 @@ def test_finite_state_rejects_nonfinite_tensors() -> None:
 
     assert finite_state({"weight": torch.ones(2)})
     assert not finite_state({"weight": torch.tensor([float("nan")])})
+
+
+def test_reference_variant_can_override_legacy_baseline_10k_default() -> None:
+    inspected = {"baseline_raw_20k": object()}
+    assert reference_variant_id({"reference_variant": "baseline_raw_20k"}, inspected) == "baseline_raw_20k"
+    with pytest.raises(ValueError, match="Missing reference variant"):
+        reference_variant_id({}, inspected)
 
 
 def test_report_includes_raw_vs_ema_numeric_delta(tmp_path) -> None:

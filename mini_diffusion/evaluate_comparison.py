@@ -38,6 +38,13 @@ def config_sha256(path: str | Path) -> str:
     return sha256(path)
 
 
+def reference_variant_id(config: dict[str, Any], inspected: dict[str, Any]) -> str:
+    variant_id = config.get("reference_variant", "baseline_raw_10k")
+    if variant_id not in inspected:
+        raise ValueError(f"Missing reference variant: {variant_id}")
+    return variant_id
+
+
 def finite_state(state: dict[str, torch.Tensor]) -> bool:
     return all(torch.isfinite(value).all() for value in state.values() if isinstance(value, torch.Tensor))
 
@@ -143,10 +150,7 @@ def write_markdown(results: dict[str, Any], output: Path) -> None:
     lines.extend([
         "## Interpretation", "",
         "Loss values are intentionally excluded: baseline and REPA optimize different objectives. Read matched checkpoint comparisons together with FID, KID, precision, recall, failures, duplicate counts, and paired fixed-seed grids; do not select a winner from FID alone.", "",
-        "- Baseline dynamics: compare `baseline_10k_vs_20k`.",
-        "- REPA dynamics and current raw checkpoint: compare `repa_10k_vs_20k`.",
-        "- Equal-budget REPA evidence: compare `baseline_vs_repa_10k` and `baseline_vs_repa_20k` only.",
-        "- EMA is diagnostic only: compare `repa_raw_vs_ema_20k`.", "",
+        "The matched comparisons above are the protocol's decision evidence; EMA variants, when present, are diagnostic only.", "",
         f"All checkpoint SHA-256 values were unchanged after evaluation: `{results['checkpoint_unchanged']}`. Repeated fixed-seed one-image probes were bitwise identical for every variant: `{results['deterministic_sampling']}`.",
         "Full-1000 evaluation, sampler ablation, CFG sweep, and training were not run.",
     ])
@@ -187,7 +191,8 @@ def main() -> None:
     if protocol["samples"] != 200 or protocol["sampler"] != "heun" or protocol["steps"] != 50 or float(protocol["guidance_scale"]) != 1.0 or int(protocol["class_id"]) != 0:
         raise ValueError("This comparison CLI supports only the canonical AFHQ quick-200 Heun-50 CFG-1.0 protocol")
     inspected = {variant["id"]: (*inspect_variant(variant), variant) for variant in config["variants"]}
-    reference_cfg = inspected["baseline_raw_10k"][1]
+    reference_id = reference_variant_id(config, inspected)
+    reference_cfg = inspected[reference_id][1]
     if any(not compatible(reference_cfg, item[1]) for item in inspected.values()):
         raise ValueError("Checkpoint architectures, resolution, latent shape, VAE, or class count are incompatible")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -234,7 +239,7 @@ def main() -> None:
     for record in variants.values(): record.pop("images")
     git_commit = __import__("subprocess").check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     results = {"name": config["name"], "protocol": protocol, "dataset_fingerprint": None, "device": str(device), "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else None, "git_commit": git_commit, "duration_seconds": time.perf_counter() - started, "variants": variants, "rows": rows, "changes": changes, "checkpoint_unchanged": all(sha256(Path(value["checkpoint"])) == value["checkpoint_sha256"] for value in variants.values()), "deterministic_sampling": all(value["deterministic_probe"] for value in variants.values())}
-    results["dataset_fingerprint"] = inspected["baseline_raw_10k"][0]["cache_fingerprint"]
+    results["dataset_fingerprint"] = inspected[reference_id][0]["cache_fingerprint"]
     (output / "comparison.json").write_text(json.dumps(results, indent=2, sort_keys=True), encoding="utf-8")
     (output / "run_manifest.json").write_text(json.dumps({"config": str(config_path).replace("\\", "/"), "config_sha256": config_sha256(config_path), "protocol": protocol, "checkpoint_sha256": {key: value["checkpoint_sha256"] for key, value in variants.items()}}, indent=2, sort_keys=True), encoding="utf-8")
     write_csv(rows, output / "metrics.csv"); write_markdown(results, output / "report.md")
