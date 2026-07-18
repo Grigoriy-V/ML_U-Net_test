@@ -91,7 +91,7 @@ CIFAR-10 DDPM
 
 ## 2. Текущий этап
 
-### 2.1 REPA early-stop: 10k REPA → 20k без REPA — 🟡 следующий эксперимент
+### 2.1 REPA early-stop: 10k REPA → 20k без REPA — ✅ завершён и зафиксирован
 
 **Цель:** проверить, можно ли взять раннюю структурную пользу REPA, а затем дать модели свободно улучшать текстуры и мелкие детали.
 
@@ -109,24 +109,17 @@ CIFAR-10 DDPM
    - REPA 10k → OFF → raw 20k;
    - EMA только диагностически.
 
-Решение:
+Решение: по утверждённому supervisor решению текущий этап закрыт на evidence quick-200. Победитель — raw early-stop 20k: `outputs/afhq_cat_sit_b_128_repa_early_stop/checkpoints/best_raw_0020000.pt`, SHA-256 `300b5600b86d1a35ebf2c27307e480070cceee113735b23ffca8e46316e57bd0`; это hash-identical immutable copy `step_0020000.pt`. Он лидирует по FID `45.787` и KID `0.01692`. Baseline остаётся лучше по precision `0.340` против `0.280` и recall `0.754` против `0.732`; это зафиксированное ограничение выбора. Always-on REPA исключён из дальнейшего отбора. Full-1000 сознательно пропущен по решению supervisor; EMA не выбиралась.
 
-- Early-stop лучше REPA 20k и baseline → использовать staged REPA дальше.
-- Early-stop лучше REPA, но хуже baseline → REPA не нужна для текущего AFHQ-рецепта.
-- Early-stop хуже REPA → отключение на 10k слишком раннее.
-- Если результат неоднозначен, не плодить много веток сразу; следующим кандидатом будет меньший REPA coefficient или отключение на 5k.
+### 2.2 Зафиксировать финальную AFHQ Cats модель — ✅ завершено для текущего этапа
 
-Full-1000 запускать только если quick-200 выявит реального финалиста.
-
-### 2.2 Зафиксировать финальную AFHQ Cats модель — ⏭ после early-stop
-
-- Выбрать один canonical raw checkpoint.
-- Сохранить SHA-256, config, quick/full metrics и fixed-seed grid.
-- Сделать краткий model card: данные, ограничения, VAE ceiling, известные артефакты, скорость и VRAM.
+- Canonical raw checkpoint: `outputs/afhq_cat_sit_b_128_repa_early_stop/checkpoints/best_raw_0020000.pt`.
+- Зафиксированы SHA-256, config, quick-200 metrics и fixed-seed comparison grids в отчёте и experiment ledger.
+- Ограничение: freeze основан на quick-200, а не на full-1000; baseline сохранил преимущество по precision/recall.
 
 ## 3. Ближайшие следующие этапы
 
-### 3.1 Transfer learning: Cats → все классы AFHQ — ⏭
+### 3.1 Transfer learning: Cats → все классы AFHQ — 🟡 следующий утверждённый шаг
 
 **Цель:** проверить полезность дообучения собственной модели на новом распределении, а не всегда начинать с нуля.
 

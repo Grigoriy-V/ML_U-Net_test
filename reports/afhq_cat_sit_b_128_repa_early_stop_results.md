@@ -40,6 +40,10 @@ Early-stop versus baseline: FID `-2.264` (`-4.71%`), KID `-0.003596` (`-17.53%`)
 
 Artifacts: `evaluation/afhq_cat_baseline_repa_early_stop_20k/comparison.json`, `metrics.csv`, `report.md`, `grids/`, `comparisons/`, and `nearest_neighbors/`.
 
-## Evidence-limited conclusion
+## Final decision and checkpoint freeze
 
-Early-stop clearly beats always-on REPA on FID/KID and also has a lower FID/KID than baseline, so switching REPA off at 10k produced useful evidence. It does not dominate baseline: baseline remains better on precision and recall. The quick-200 result identifies early-stop as a plausible finalist, but the trade-off is not unambiguously sufficient by itself to select or freeze a model. Supervisor review is required before any full-1000 run.
+The supervisor selected and closed the current AFHQ Cats comparison stage on the recorded quick-200 evidence. The winner is raw early-stop REPA 20k: `outputs/afhq_cat_sit_b_128_repa_early_stop/checkpoints/best_raw_0020000.pt`. It is an immutable hash-identical copy of `step_0020000.pt`; both SHA-256 values are `300b5600b86d1a35ebf2c27307e480070cceee113735b23ffca8e46316e57bd0`.
+
+Selection basis: early-stop has the best FID (`45.787`) and KID (`0.01692`) of the three raw 20k variants. Its known limitation is explicit: the frozen baseline remains stronger on precision (`0.340` versus `0.280`) and recall (`0.754` versus `0.732`). Always-on REPA is excluded from further finalist consideration. Full-1000 was deliberately skipped by supervisor decision, and EMA was not selected; this is a quick-200 stage freeze rather than a full-protocol claim.
+
+The next roadmap step is a separate Cats → all-AFHQ transfer experiment; it must treat this frozen checkpoint as the parent artifact, not resume or modify it.
