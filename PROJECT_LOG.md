@@ -439,3 +439,17 @@ Use the ledger as the canonical structured input for a future ML Training Playbo
 ### Addendum
 
 The completed AFHQ Cats 10k raw evaluation is now recorded in `reports/experiment_ledger.jsonl` as `afhq-cats-10k-raw-evaluation-20260718`. The decision remains to continue the unchanged recipe to 20k; this ledger update does not launch training.
+
+## 2026-07-18: AFHQ Cats SiT-B/2 20k Quick Validation
+
+### Goal
+
+Validate raw and EMA step-20k checkpoints against the canonical raw 10k result using only the shared 200-seed quick protocol, then freeze the strongest current model version.
+
+### Outcome
+
+Raw 20k improved FID from `55.644` to `48.051`, KID from `0.02740` to `0.02052`, and precision from `0.290` to `0.340`; recall moved from `0.802` to `0.754`. EMA 20k remained weaker at FID `129.023`. Both checkpoints are finite and unchanged; raw 20k sampling is byte-identical under repeated fixed seeds, with no failed images or feature duplicates. `best_raw_0020000.pt` is a SHA-identical frozen copy of the step-20k checkpoint. The TensorBoard loss tags remain semantically mismatched under accumulation: `train/loss` is a two-microbatch sum while `train/flow_loss` is the final microbatch value.
+
+### Decision
+
+Freeze raw 20k as the current model version. Do not treat the current `train/loss` and `train/flow_loss` tags as directly comparable means; correct or relabel logging before the next training resume. No full evaluation, sampler ablation, or additional training occurred in this milestone.

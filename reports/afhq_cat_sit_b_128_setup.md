@@ -37,6 +37,26 @@ Sampling determinism was confirmed by repeating the raw 200-seed protocol: both 
 
 Continue the existing non-REPA recipe to 20k, without resetting EMA or changing the optimizer/schedule. Raw quality and full FID improve sufficiently to justify the next 10k interval, and there are no finite, duplicate, or obvious memorization failures. Treat raw as the canonical 10k result; inspect raw and EMA again at 15k and 20k before deciding whether EMA needs a separate warm-up treatment.
 
+## 20k Checkpoint Validation
+
+Only the project quick protocol was run: the common 200 fixed seeds (`1000..1199`), held-out 500-image AFHQ split, Heun-50, and CFG 1.0. No 1,000-sample full evaluation, sampler ablation, or training was run.
+
+| Weights / checkpoint | FID | KID | Precision | Recall | Failed images | Feature duplicates |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| raw 10k canonical | 55.644 | 0.02740 | 0.290 | 0.802 | 0 | 0 |
+| raw 20k | 48.051 | 0.02052 | 0.340 | 0.754 | 0 | 0 |
+| EMA 20k | 129.023 | 0.08699 | 0.075 | 0.780 | 0 | 0 |
+
+`step_0020000.pt` is intact at `global_step=20000`, SHA-256 `1eb7db8e91d7727528421d09ddd82eeb8ca37573b12652f43c2180942a93e7f7`. Model and EMA tensors are finite; optimizer, scheduler, and Python/NumPy/Torch/CUDA RNG states are present. The 10k SHA-256 remains unchanged. Repeating raw 20k sampling produced the same grid SHA-256 `4c8ceca11d9b1fd5cce5605e623cd205f09f8f7080669d6b37221909705def30`, and evaluation did not modify either checkpoint.
+
+Fixed decoded previews at `outputs/afhq_cat_sit_b_128/samples/step_0010000_*_cfg1_heun25.png`, `step_0015000_*_cfg1_heun25.png`, and `step_0020000_*_cfg1_heun25.png` use the same seed 123, Heun-25, and CFG 1.0. The compact comparisons are `evaluation/afhq_cat_sit_b_128/step_0020000/visual/raw_10k_15k_20k_cfg1_heun25.png` and `ema_10k_15k_20k_cfg1_heun25.png`. Raw sharpens and stabilizes facial structure from 10k through 20k while retaining colour and pose diversity. EMA improves across the same previews but remains visibly softer and less coherent than raw at 20k. Quick raw nearest-neighbour and outlier pairs are saved under `evaluation/afhq_cat_sit_b_128/step_0020000/quick_raw_cfg1_heun50/`; inspection found similar held-out cats rather than exact copies.
+
+TensorBoard has separate event files for 1--10k and 10--20k. At 20k, `train/loss=1.385372`, `train/flow_loss=0.695858`, and LR `9.206545e-05`. The loss logging correction is not verified: with `grad_accum_steps: 2`, `train/loss` currently records the sum of the two microbatch flow losses while `train/flow_loss` records only the final microbatch. The values are finite and the trend improves, but these tags are not directly comparable as a mean loss. No training code was changed in this validation.
+
+### Decision
+
+Freeze `outputs/afhq_cat_sit_b_128/checkpoints/best_raw_0020000.pt` as the current model version. It is a byte-identical copy of raw step 20k with the SHA-256 above. Use raw 20k for future fixed comparisons. Before the next resume, correct or relabel accumulated loss logging so TensorBoard exposes a per-update mean alongside any microbatch diagnostic.
+
 ## Design
 
 - Dataset: official AFHQ cats only. Expected local layout is `datasets/afhq/train/cat` plus `datasets/afhq/test/cat`; the official StarGAN v2 `val/cat` held-out layout is accepted as a read-only test alias.
