@@ -122,10 +122,11 @@ D:/ML/
 `14b7c2597d1a7e6c57a4ac8c15d3767338c0a27d`. Он содержит project-local
 profiles, lifecycle/helper, schemas, bootstrap, dry-run-only sync и документы.
 
-**Ближайшее действие:** bootstrap отдельного sklearn/classical-ML репозитория
-из принятого Core, затем read-only umbrella/superchat verification для
-нескольких репозиториев. Generative ML остаётся на паузе; ML-команды не
-запускать.
+**Ближайшее действие:** подключить/pin принятый Core к `My_first_model` через
+safe sync и пройти no-ML generative regression gate. Только затем bootstrap
+отдельного sklearn/classical-ML репозитория и portability smoke, после чего —
+read-only umbrella/superchat verification для нескольких репозиториев.
+Generative ML остаётся на паузе; ML-команды не запускать.
 
 ### 2.2 Portfolio Packaging & Repository Readiness — ✅ завершён
 
@@ -401,9 +402,13 @@ Training evaluator плюс production-oriented QA/Inspector с автомати
 2. ✅ Закрыть `Portfolio Packaging & Repository Readiness`: README, case study, retrospective, visuals, verifier, attribution, MIT, независимый review и переименование публичного репозитория.
 3. ✅ Завершить и принять ограниченный baseline-аудит/inventory существующей orchestration-системы: [audit report](reports/orchestration_core_baseline_audit.md) фиксирует Core/adapter границу, regression baseline, confirmed helper blocker и factual `.codex` tracking correction.
 4. ✅ Завершить и принять [safe validated logging helpers](reports/orchestration_agent_ledger_helpers.md): 11 targeted tests, true EOF append, Windows/POSIX lock-before-mutation, strict terminal evidence/computed duration, explicit supervisor identity и accepted `.codex` allowlist; historical warnings сохранены как bounded legacy evidence.
-5. **Следующее точное действие:** после clean rollback commit текущего milestone создать отдельный Core repo v0.1. Generative backlog остаётся на паузе; не создавать sklearn repo до Core acceptance.
-6. Подключить/pin Core к `My_first_model`, пройти regression gate и только затем bootstrap classical sklearn repo.
-7. Выполнить Luna/Terra/supervisor portability smoke без обучения моделей; затем read-only и controlled-write superchat smoke в `D:/ML`.
+5. **Следующее точное действие:** Core v0.1 уже принят и frozen; подключить/pin
+его к `My_first_model` через safe sync и пройти no-ML regression gate.
+Generative backlog остаётся на паузе.
+6. Только после принятого regression gate bootstrap отдельный classical/sklearn
+repo из Core и выполнить Luna/Terra/supervisor portability smoke без обучения.
+7. Затем выполнить read-only и controlled-write umbrella/superchat smoke в
+`D:/ML`.
 8. Принять lessons-promotion lifecycle и заморозить Core v1.0 после всех acceptance gates.
 9. После миграции выполнить dataset audit в classical ML repo.
 10. Затем вернуться к отдельному human-gated решению по `Cats → all AFHQ transfer`; после него — Generative Training & Evaluation Playbook v1 и лишь затем task-specific skills.
