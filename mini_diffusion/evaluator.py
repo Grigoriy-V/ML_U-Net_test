@@ -105,6 +105,9 @@ def reference_cache_key(root: Path, split: str, class_to_idx: dict[str, int]) ->
             digest.update(str(path.relative_to(root)).replace("\\", "/").encode())
             digest.update(str(path.stat().st_size).encode())
             digest.update(str(path.stat().st_mtime_ns).encode())
+            # Timestamps can have insufficient resolution on Windows. Include
+            # content so a same-size rewrite cannot reuse stale features.
+            digest.update(sha256(path).encode())
     digest.update(json.dumps(class_to_idx, sort_keys=True).encode())
     return digest.hexdigest()
 
