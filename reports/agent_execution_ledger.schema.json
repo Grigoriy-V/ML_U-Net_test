@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent execution ledger event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "timestamp_utc", "agent_run_id", "parent_task", "agent_name", "requested_model", "requested_reasoning", "task_type", "roadmap_step", "event_type", "status", "scope_summary", "constraints", "commands", "files_changed", "git_commit_before", "git_commit_after", "ml_ledger_event_ids", "outcome_summary", "supervisor_decision", "duration_seconds", "notes"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "event_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+    "timestamp_utc": {"type": "string", "format": "date-time"},
+    "agent_run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+    "parent_task": {"type": "string", "minLength": 1},
+    "agent_name": {"type": "string", "minLength": 1},
+    "requested_model": {"type": "string", "minLength": 1},
+    "requested_reasoning": {"type": "string", "enum": ["minimal", "low", "medium", "high", "xhigh", "max"]},
+    "task_type": {"type": "string", "minLength": 1},
+    "roadmap_step": {"type": ["string", "null"]},
+    "event_type": {"type": "string", "enum": ["started", "completed", "failed", "interrupted"]},
+    "status": {"type": "string", "enum": ["started", "completed", "failed", "interrupted"]},
+    "scope_summary": {"type": "string", "minLength": 1},
+    "constraints": {"type": "array", "items": {"type": "string"}},
+    "commands": {"type": "array", "items": {"type": "string"}},
+    "files_changed": {"type": "array", "items": {"type": "string", "pattern": "^(?![A-Za-z]:|/|\\\\).+"}},
+    "git_commit_before": {"type": ["string", "null"]},
+    "git_commit_after": {"type": ["string", "null"]},
+    "ml_ledger_event_ids": {"type": "array", "items": {"type": "string"}},
+    "outcome_summary": {"type": ["string", "null"]},
+    "supervisor_decision": {"type": ["string", "null"], "enum": ["accept", "continue", "stop", "change", "freeze", "pending", null]},
+    "duration_seconds": {"type": ["number", "null"], "minimum": 0},
+    "notes": {"type": ["string", "null"]}
+  }
+}

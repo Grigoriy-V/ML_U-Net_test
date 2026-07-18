@@ -504,3 +504,21 @@ No training, sampling, evaluation, benchmark, dataset/cache operation, checkpoin
 ### Decision
 
 The only approved next operation is the manual 10k-to-20k command in `reports/afhq_cat_sit_b_128_repa_early_stop_readiness.md`. After it completes, inspect its checkpoints and logs before authorizing the unified quick-200 comparison.
+
+## 2026-07-18: Project Agent Orchestration Profiles
+
+### Goal
+
+Add project-scoped human-supervisor and worker configuration plus an append-only audit trail, without changing the ML roadmap or running ML operations.
+
+### Outcome
+
+Added `.codex/config.toml`, Luna/Terra/Sol project profiles, `docs/agent_orchestration.md`, and the schema-validated `reports/agent_execution_ledger.jsonl`. The agent ledger includes bootstrap `started` and `completed` events for this infrastructure task. The policy routes deterministic clerical work to Luna minimal where runtime availability permits, default bounded work to Terra low, and explicitly approved complex work to Sol high. Long training and evaluation stay human-gated.
+
+### Validation
+
+Validated TOML parsing for the config and profiles, validated all agent-ledger JSONL records against its JSON Schema, and ran `git diff --check`.
+
+### Decision
+
+Adopt the new agent ledger for worker dispatches and terminal outcomes. Keep the current semi-automatic manual long-run process; if an already-open session does not expose Luna, use Terra low until a new session or restart loads project custom-agent profiles.

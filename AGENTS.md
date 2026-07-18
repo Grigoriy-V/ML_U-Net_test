@@ -14,6 +14,13 @@
 - The worker is responsible for updating `PROJECT_LOG.md`, the relevant report, and `reports/experiment_ledger.jsonl` for every material ML operation it actually runs. The supervisor verifies those records before accepting the milestone.
 - The supervisor may perform read-only inspection of reports, ledger entries, checkpoint metadata, generated summaries, and Git status/log/diff statistics. If implementation-level verification is needed, delegate that verification to a worker rather than inspecting or modifying the code directly.
 
+## Agent Orchestration And Audit
+
+- Project agent limits are defined in `.codex/config.toml`; executable profiles are in `.codex/agents/`; detailed lifecycle and failure rules are in `docs/agent_orchestration.md`.
+- Use `luna_clerk` at `minimal` only for deterministic clerical work, `terra_worker` at `low` for the default bounded implementation/validation work, and `sol_specialist` at `high` only with explicit supervisor approval for complex or high-risk work. If Luna is unavailable in the current session, fall back to Terra at `low`.
+- A worker must not change its model or reasoning level, delegate, or broaden scope without supervisor approval. Use one write-heavy worker for overlapping mutable scope; long training and evaluation remain human-gated.
+- Every worker task appends a `started` event and one terminal event to `reports/agent_execution_ledger.jsonl`, validated by `reports/agent_execution_ledger.schema.json`. Link real ML operations to their `reports/experiment_ledger.jsonl` event IDs; do not invent token or credit data.
+
 ## ML Experiment Logging
 
 For every material ML operation that actually runs -- dataset preparation, cache creation, benchmark, smoke test, training milestone, evaluation, comparison, checkpoint freeze, or experiment closeout -- the agent must append a structured event to `reports/experiment_ledger.jsonl` before its final response.
