@@ -7,6 +7,7 @@ import os
 import random
 import sys
 import uuid
+from contextlib import nullcontext
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,6 +60,23 @@ def build_optimizer(model: nn.Module, cfg: dict) -> torch.optim.Optimizer:
     try: return torch.optim.AdamW(model.parameters(), **kwargs)
     except (RuntimeError, TypeError):
         kwargs.pop("fused", None); print("warning: fused AdamW unavailable; using AdamW"); return torch.optim.AdamW(model.parameters(), **kwargs)
+def build_scheduler(optimizer: torch.optim.Optimizer, cfg: dict, max_steps: int):
+    train = cfg["train"]
+    warmup = int(train.get("warmup_steps", 0))
+    minimum = train.get("min_learning_rate")
+    if warmup <= 0 and minimum is None:
+        return None
+    if warmup < 0 or max_steps < 1:
+        raise ValueError("warmup_steps and max_steps must be valid")
+    minimum_ratio = float(minimum if minimum is not None else train["learning_rate"]) / float(train["learning_rate"])
+    if not 0 < minimum_ratio <= 1:
+        raise ValueError("min_learning_rate must be in (0, learning_rate]")
+    def multiplier(step_index: int) -> float:
+        if warmup and step_index < warmup:
+            return float(step_index + 1) / float(warmup)
+        progress = (step_index - warmup) / max(1, max_steps - warmup)
+        return minimum_ratio + (1 - minimum_ratio) * 0.5 * (1 + math.cos(math.pi * min(1.0, progress)))
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, multiplier)
 def make_loader(cfg: dict, repa_enabled: bool = False) -> tuple[DataLoader, dict]:
     payload = load_cache(Path(cfg["data"]["cache_dir"]) / "train.pt", expected_resolution=cfg["data"]["resolution"], expected_vae_model_id=cfg["vae"]["model_id"])
     class_filter = cfg["data"].get("class_filter")
@@ -81,11 +99,13 @@ def make_loader(cfg: dict, repa_enabled: bool = False) -> tuple[DataLoader, dict
     return loader, payload
 def infinite(loader):
     while True: yield from loader
-def save_checkpoint(path: Path, model, optimizer, ema, cfg, step: int, fingerprint: str, projector: nn.Module | None = None, feature_metadata: dict | None = None, *, overwrite: bool = True) -> None:
+def save_checkpoint(path: Path, model, optimizer, ema, cfg, step: int, fingerprint: str, projector: nn.Module | None = None, feature_metadata: dict | None = None, scheduler=None, *, overwrite: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and not overwrite:
         raise FileExistsError(f"Refusing to overwrite immutable milestone checkpoint: {path}")
-    payload = {"architecture": "SiT-S/2 velocity v1", "model": model.state_dict(), "ema": ema.state_dict(), "optimizer": optimizer.state_dict(), "global_step": step, "config": cfg, "cache_fingerprint": fingerprint, "torch_rng_state": torch.get_rng_state(), "cuda_rng_state": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None, "numpy_rng_state": np.random.get_state(), "python_rng_state": random.getstate()}
+    payload = {"architecture": "SiT velocity v1", "model": model.state_dict(), "ema": ema.state_dict(), "optimizer": optimizer.state_dict(), "global_step": step, "config": cfg, "cache_fingerprint": fingerprint, "torch_rng_state": torch.get_rng_state(), "cuda_rng_state": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None, "numpy_rng_state": np.random.get_state(), "python_rng_state": random.getstate()}
+    if scheduler is not None:
+        payload["scheduler"] = scheduler.state_dict()
     if projector is not None:
         payload.update({"repa_format_version": 1, "repa_projector": projector.state_dict(), "repa": cfg["repa"], "feature_cache_metadata": feature_metadata})
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
@@ -97,9 +117,13 @@ def save_checkpoint(path: Path, model, optimizer, ema, cfg, step: int, fingerpri
     finally:
         if temporary.exists():
             temporary.unlink()
-def resume_checkpoint(path: str, model, optimizer, ema, device, expected_cache_fingerprint: str | None = None, projector: nn.Module | None = None, expected_feature_fingerprint: str | None = None) -> int:
+def resume_checkpoint(path: str, model, optimizer, ema, device, expected_cache_fingerprint: str | None = None, projector: nn.Module | None = None, expected_feature_fingerprint: str | None = None, scheduler=None) -> int:
     # Keep CPU RNG state on CPU; map_location=device would incorrectly move it to CUDA.
     ckpt = torch.load(path, map_location="cpu", weights_only=False); model.load_state_dict(ckpt["model"]); ema.load_state_dict(ckpt["ema"]); optimizer.load_state_dict(ckpt["optimizer"]); torch.set_rng_state(ckpt["torch_rng_state"].cpu()); np.random.set_state(ckpt["numpy_rng_state"]); random.setstate(ckpt["python_rng_state"])
+    if scheduler is not None:
+        if "scheduler" not in ckpt:
+            raise ValueError("Checkpoint has no scheduler state for this scheduled training config")
+        scheduler.load_state_dict(ckpt["scheduler"])
     if expected_cache_fingerprint is not None and ckpt.get("cache_fingerprint") != expected_cache_fingerprint:
         raise ValueError("Checkpoint cache fingerprint does not match the current latent cache")
     if projector is not None:
@@ -134,27 +158,38 @@ def write_latent_preview(model, ema, cfg: dict, device: torch.device, step: int)
     preview_class = sampling.get("preview_class")
     labels = (torch.full((count,), int(preview_class), device=device, dtype=torch.long) if preview_class is not None
               else torch.arange(count, device=device) % cfg["data"]["num_classes"])
-    generator = torch.Generator(device=device).manual_seed(int(sampling.get("preview_seed", cfg.get("seed", 123))))
-    with ema.average_parameters(model):
-        latents = sample_ode(model, (count, 4, cfg["data"]["latent_resolution"], cfg["data"]["latent_resolution"]), labels, device, steps=int(sampling.get("preview_steps", 50)), sampler=sampling.get("preview_sampler", "heun"), guidance_scale=float(sampling.get("guidance_scale", 1.5)), generator=generator, diagnostics=True).cpu()
-    path = Path(cfg["output_dir"]) / "latent_previews" / f"step_{step:07d}.pt"; path.parent.mkdir(parents=True, exist_ok=True); torch.save({"latents": latents, "labels": labels.cpu(), "seed": sampling.get("preview_seed", cfg.get("seed", 123)), "step": step}, path)
-    if not sampling.get("preview_decode", False):
-        return path
-    vae = load_frozen_vae(cfg["vae"]["model_id"], device, cfg["vae"].get("revision"))
+    shape = (count, 4, cfg["data"]["latent_resolution"], cfg["data"]["latent_resolution"])
+    seed = int(sampling.get("preview_seed", cfg.get("seed", 123)))
+    noise = torch.randn(shape, generator=torch.Generator(device="cpu").manual_seed(seed))
+    weights = sampling.get("preview_weights", ["ema"])
+    scales = [float(scale) for scale in sampling.get("preview_guidance_scales", [sampling.get("guidance_scale", 1.5)])]
+    output_dir = Path(cfg["output_dir"]); latent_dir = output_dir / "latent_previews"; latent_dir.mkdir(parents=True, exist_ok=True)
+    vae = load_frozen_vae(cfg["vae"]["model_id"], device, cfg["vae"].get("revision")) if sampling.get("preview_decode", False) else None
+    first_path = None
     try:
-        images = decode_latents(vae, latents.to(device)).cpu()
-        pixels = ((images + 1.0) * 0.5).clamp(0, 1)
-        if pixels.shape != (count, 3, cfg["data"]["resolution"], cfg["data"]["resolution"]) or not torch.isfinite(pixels).all():
-            raise RuntimeError("Decoded preview is non-finite or has an invalid shape")
-        image_path = Path(cfg["output_dir"]) / "samples" / f"step_{step:07d}_ema_{sampling.get('preview_sampler', 'heun')}{sampling.get('preview_steps', 50)}.png"
-        image_path.parent.mkdir(parents=True, exist_ok=True)
-        save_image(pixels, image_path, nrow=max(1, int(count**0.5)))
-        print(f"decoded_preview_written: {image_path}")
+        for weight in weights:
+            if weight not in {"raw", "ema"}:
+                raise ValueError("preview_weights must contain only raw and/or ema")
+            context = ema.average_parameters(model) if weight == "ema" else nullcontext()
+            with context:
+                for scale in scales:
+                    latents = sample_ode(model, shape, labels, device, steps=int(sampling.get("preview_steps", 50)), sampler=sampling.get("preview_sampler", "heun"), guidance_scale=scale, diagnostics=True, initial_noise=noise).cpu()
+                    tag = f"{weight}_cfg{scale:g}_{sampling.get('preview_sampler', 'heun')}{sampling.get('preview_steps', 50)}"
+                    path = latent_dir / f"step_{step:07d}_{tag}.pt"
+                    torch.save({"latents": latents, "labels": labels.cpu(), "seed": seed, "step": step, "weights": weight, "guidance_scale": scale}, path)
+                    first_path = first_path or path
+                    if vae is not None:
+                        pixels = ((decode_latents(vae, latents.to(device)).cpu() + 1.0) * 0.5).clamp(0, 1)
+                        if pixels.shape != (count, 3, cfg["data"]["resolution"], cfg["data"]["resolution"]) or not torch.isfinite(pixels).all():
+                            raise RuntimeError("Decoded preview is non-finite or has an invalid shape")
+                        image_path = output_dir / "samples" / f"step_{step:07d}_{tag}.png"; image_path.parent.mkdir(parents=True, exist_ok=True)
+                        save_image(pixels, image_path, nrow=max(1, int(count**0.5)))
+                        print(f"decoded_preview_written: {image_path}")
     finally:
-        del vae
-        if device.type == "cuda":
-            torch.cuda.empty_cache()
-    return path
+        if vae is not None:
+            del vae
+        if device.type == "cuda": torch.cuda.empty_cache()
+    return first_path
 def main() -> None:
     parser = argparse.ArgumentParser(); parser.add_argument("--config", required=True); parser.add_argument("--resume"); parser.add_argument("--max-steps", type=int); parser.add_argument("--overfit-smoke", action="store_true"); parser.add_argument("--overfit-updates", type=int, default=40); args = parser.parse_args()
     cfg = load_config(args.config)
@@ -162,12 +197,12 @@ def main() -> None:
     if cfg.get("train", {}).get("init_from"):
         raise ValueError("init_from is forbidden for this SiT+REPA experiment; train from scratch or resume its own REPA checkpoint")
     max_steps = args.max_steps or cfg["train"]["max_steps"]; set_seed(cfg.get("seed", 123)); device, dtype, autocast = device_dtype(cfg)
-    torch.backends.cudnn.benchmark = bool(cfg.get("performance", {}).get("cudnn_benchmark", False)); model = build_model(cfg).to(device); projector = build_projector(cfg, device); trainable = nn.ModuleList([model] + ([projector] if projector else [])); optimizer = build_optimizer(trainable, cfg); ema = EMA(model, cfg["train"]["ema_decay"], foreach=cfg.get("performance", {}).get("ema_foreach", False)); loader, payload = make_loader(cfg, projector is not None); feature_metadata = getattr(loader.dataset, "metadata", None)
+    torch.backends.cudnn.benchmark = bool(cfg.get("performance", {}).get("cudnn_benchmark", False)); model = build_model(cfg).to(device); projector = build_projector(cfg, device); trainable = nn.ModuleList([model] + ([projector] if projector else [])); optimizer = build_optimizer(trainable, cfg); scheduler = build_scheduler(optimizer, cfg, max_steps); ema = EMA(model, cfg["train"]["ema_decay"], foreach=cfg.get("performance", {}).get("ema_foreach", False)); loader, payload = make_loader(cfg, projector is not None); feature_metadata = getattr(loader.dataset, "metadata", None)
     if projector is not None:
         # Open/validate cache in the parent before workers are spawned; workers reopen mmap handles lazily.
         loader.dataset._open_features(); feature_metadata = loader.dataset.metadata
     feature_fp = feature_metadata.get("fingerprint") if feature_metadata else None
-    step = resume_checkpoint(args.resume, model, optimizer, ema, device, cache_fingerprint(payload), projector, feature_fp) if args.resume else 0
+    step = resume_checkpoint(args.resume, model, optimizer, ema, device, cache_fingerprint(payload), projector, feature_fp, scheduler) if args.resume else 0
     params = sum(p.numel() for p in trainable.parameters() if p.requires_grad); accum = cfg["train"].get("grad_accum_steps", 1); print(f"trainable_parameters: {params:,}\nbase_sit_parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}\nprojector_parameters: {sum(p.numel() for p in projector.parameters() if p.requires_grad) if projector else 0:,}\ndevice: {device}\ndtype: {dtype} autocast={autocast}\nbatch_size: {cfg['data']['batch_size']}\neffective_batch_size: {cfg['data']['batch_size'] * accum}\nvae_loaded_for_training: false\ndino_loaded_for_training: false")
     out = Path(cfg["output_dir"]); writer = SummaryWriter(out / "logs"); batches = infinite(loader); pbar = tqdm(total=max_steps, initial=step, desc=cfg["name"]); latest = out / "checkpoints" / "latest.pt"; model.train()
     while step < max_steps:
@@ -182,21 +217,21 @@ def main() -> None:
                     flow_loss = velocity_loss(model(xt, t, labels), target); alignment_loss = cosine = None; loss = flow_loss / accum
             loss.backward(); total += float(loss.detach()) * accum
         if cfg["train"].get("grad_clip", 0): nn.utils.clip_grad_norm_(trainable.parameters(), cfg["train"]["grad_clip"])
-        optimizer.step(); ema.update(model); step += 1; pbar.update(1)
+        optimizer.step(); ema.update(model); scheduler.step() if scheduler is not None else None; step += 1; pbar.update(1)
         if step % cfg["train"].get("log_every", 1) == 0:
-            writer.add_scalar("train/loss", total, step); writer.add_scalar("train/flow_loss", float(flow_loss.detach()), step)
+            writer.add_scalar("train/loss", total, step); writer.add_scalar("train/flow_loss", float(flow_loss.detach()), step); writer.add_scalar("train/learning_rate", optimizer.param_groups[0]["lr"], step)
             if projector: writer.add_scalar("train/repa_loss", float(alignment_loss.detach()), step); writer.add_scalar("train/cosine_similarity", float(cosine.detach()), step); writer.add_scalar("train/repa_coefficient", float(cfg["repa"]["coefficient"]), step)
             pbar.set_postfix(loss=f"{total:.4f}")
         if step % cfg["train"].get("sample_every", 10**9) == 0: print(f"latent_preview_written: {write_latent_preview(model, ema, cfg, device, step)}")
         if step % cfg["train"].get("save_every", 100) == 0:
-            save_checkpoint(latest, model, optimizer, ema, cfg, step, cache_fingerprint(payload), projector, feature_metadata)
+            save_checkpoint(latest, model, optimizer, ema, cfg, step, cache_fingerprint(payload), projector, feature_metadata, scheduler)
             print(f"checkpoint_written: {latest}")
         milestone_every = int(cfg["train"].get("milestone_every", 0))
         if milestone_every and step % milestone_every == 0:
             milestone = out / "checkpoints" / f"step_{step:07d}.pt"
-            save_checkpoint(milestone, model, optimizer, ema, cfg, step, cache_fingerprint(payload), projector, feature_metadata, overwrite=False)
+            save_checkpoint(milestone, model, optimizer, ema, cfg, step, cache_fingerprint(payload), projector, feature_metadata, scheduler, overwrite=False)
             print(f"milestone_checkpoint_written: {milestone}")
-    save_checkpoint(latest, model, optimizer, ema, cfg, step, cache_fingerprint(payload), projector, feature_metadata); writer.close(); pbar.close()
+    save_checkpoint(latest, model, optimizer, ema, cfg, step, cache_fingerprint(payload), projector, feature_metadata, scheduler); writer.close(); pbar.close()
     if device.type == "cuda": print(f"cuda_vram_peak_allocated_gb: {torch.cuda.max_memory_allocated() / 1024**3:.2f}\ncuda_vram_peak_reserved_gb: {torch.cuda.max_memory_reserved() / 1024**3:.2f}")
     print(f"checkpoint_written: {latest}")
 

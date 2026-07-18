@@ -21,8 +21,9 @@ def validate_cache(payload: dict[str, Any], *, expected_resolution: int | None =
         raise ValueError("Latents must use a floating dtype and be finite")
     if not isinstance(labels, torch.Tensor) or labels.ndim != 1 or labels.shape[0] != latents.shape[0] or labels.dtype != torch.long:
         raise ValueError("Labels must be int64 [N] and match latents")
-    if (labels < 0).any() or (labels >= 10).any() or not isinstance(paths, list) or len(paths) != latents.shape[0]:
-        raise ValueError("Invalid Imagenette labels or relative paths")
+    num_classes = int(metadata.get("num_classes", 10))
+    if num_classes < 1 or (labels < 0).any() or (labels >= num_classes).any() or not isinstance(paths, list) or len(paths) != latents.shape[0]:
+        raise ValueError("Invalid labels or relative paths for latent cache")
     if not isinstance(metadata, dict) or not REQUIRED_METADATA.issubset(metadata):
         raise ValueError("Latent cache metadata is incomplete")
     if metadata["format_version"] != CACHE_FORMAT_VERSION or metadata["resolution"] != 128:

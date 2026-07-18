@@ -1,0 +1,57 @@
+name: afhq_cat_sit_b_128_debug
+seed: 123
+output_dir: outputs/afhq_cat_sit_b_128_debug
+data:
+  dataset: afhq-cat-official
+  root: datasets/afhq
+  cache_dir: outputs/afhq_cat_sit_b_128_debug/latents
+  resolution: 128
+  latent_resolution: 16
+  num_classes: 1
+  augmentation_variants: 4
+  augmentation_seed: 123
+  latent_seed: 123
+  prepare_batch_size: 8
+  prepare_num_workers: 0
+  batch_size: 8
+  num_workers: 0
+  pin_memory: true
+  non_blocking: true
+  persistent_workers: false
+vae:
+  model_id: stabilityai/sd-vae-ft-mse
+  revision: null
+model:
+  patch_size: 2
+  hidden_size: 768
+  depth: 12
+  num_heads: 12
+  mlp_ratio: 4.0
+  cond_drop_prob: 0.1
+train:
+  max_steps: 2
+  learning_rate: 0.0001
+  min_learning_rate: 0.00001
+  warmup_steps: 1
+  weight_decay: 0.01
+  grad_accum_steps: 1
+  grad_clip: 1.0
+  ema_decay: 0.9999
+  dtype: bf16
+  log_every: 1
+  save_every: 1
+  milestone_every: 0
+  sample_every: 100
+sampling:
+  preview_sampler: heun
+  preview_steps: 2
+  preview_seed: 123
+  preview_count: 4
+  preview_class: 0
+  preview_guidance_scales: [1.0, 1.5]
+  preview_weights: [raw, ema]
+  preview_decode: false
+performance:
+  fused_adamw: true
+  ema_foreach: true
+  cudnn_benchmark: true

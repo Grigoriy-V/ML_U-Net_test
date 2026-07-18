@@ -255,3 +255,16 @@ Benchmark baseline and cached REPA without writing a training checkpoint:
 .\.venv\Scripts\python.exe mini_diffusion\benchmark_repa.py --config mini_diffusion\configs\imagenette_sit_s_128_repa.yaml --mode baseline --warmup 10 --steps 50 --output reports\repa_benchmark_baseline.json
 .\.venv\Scripts\python.exe mini_diffusion\benchmark_repa.py --config mini_diffusion\configs\imagenette_sit_s_128_repa.yaml --mode repa --warmup 10 --steps 50 --output reports\repa_benchmark_repa.json
 ```
+
+## AFHQ Cats SiT-B/2
+
+The one-class AFHQ Cats experiment is isolated at `outputs\afhq_cat_sit_b_128`, does not use REPA, and trains a 129,929,488-parameter SiT-B/2 latent model. Download the official AFHQ archive from [clovaai/stargan-v2](https://github.com/clovaai/stargan-v2#animal-faces-hq-dataset-afhq), respect its CC BY-NC 4.0 license, and extract `train\cat` plus `test\cat` (or official held-out `val\cat`) under `datasets\afhq`.
+
+Prepare the deterministic four-variant train cache and the held-out test cache, then begin the first bounded run:
+
+```powershell
+.\.venv\Scripts\python.exe mini_diffusion\prepare_afhq_cat_latents.py --config mini_diffusion\configs\afhq_cat_sit_b_128.yaml
+.\.venv\Scripts\python.exe mini_diffusion\train_sit.py --config mini_diffusion\configs\afhq_cat_sit_b_128.yaml --max-steps 10000
+```
+
+The selected configuration uses physical batch 128 with two accumulation steps (effective batch 256). It writes raw and EMA fixed-noise previews for CFG 1.0 and 1.5 every 5k steps. Full setup, smoke commands, benchmark, and held-out evaluator commands are in `reports/afhq_cat_sit_b_128_setup.md`.

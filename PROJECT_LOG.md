@@ -365,3 +365,17 @@ Full pytest completed with `33 passed`. Frozen baseline 100k and REPA 350k check
 ### Decision
 
 Close this experiment. The best baseline is EMA 100k; the best final model is REPA EMA 350k. REPA improves final quality and coverage, but it does not demonstrate earlier convergence: it is not favorable at 100k and becomes favorable only later in the equal-step curve. The next implementation milestone is deterministic img2img followed by low-strength hires fix around the selected REPA 350k model.
+
+## 2026-07-18: AFHQ Cats SiT-B/2 Preparation
+
+### Goal
+
+Prepare a separate one-class 128x128 AFHQ Cats SiT-B/2 experiment with deterministic augmented latent caching, scheduled training, evaluation, and a bounded first-run plan. REPA is excluded.
+
+### Outcome
+
+Added official AFHQ train/test loader support, deterministic four-augmentation train manifests with source SHA-256, separate AFHQ cache/output/evaluation paths, SiT-B/2 config, warmup plus cosine scheduler checkpoint/resume state, fixed raw/EMA preview matrix, an AFHQ-specific evaluator, and an isolated synthetic benchmark. Full pytest passed with `36 passed`. On RTX 4090, batch 128 achieved 2072 images/s and 5.77 GB allocated peak; batch 256 achieved 2031 images/s and 9.27 GB. Batch 128 with two accumulation steps was selected for effective batch 256.
+
+### Decision
+
+Do not start AFHQ training until the official dataset is placed locally. The absent dataset produced the expected clear loader error, so no AFHQ cache, VAE ceiling, smoke train/resume/sample chain, or long run was fabricated. Once data is available, run the documented debug chain, then the bounded 10k command and held-out AFHQ evaluator.

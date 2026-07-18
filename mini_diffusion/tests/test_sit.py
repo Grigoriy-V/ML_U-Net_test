@@ -7,7 +7,7 @@ import torch
 from mini_diffusion.diffusion import EMA
 from mini_diffusion.latent_cache import CACHE_FORMAT_VERSION, load_cache, validate_cache
 from mini_diffusion.sit import SiT, linear_interpolant, sample_ode, velocity_loss
-from mini_diffusion.train_sit import build_model, build_optimizer, resume_checkpoint, save_checkpoint
+from mini_diffusion.train_sit import build_model, build_optimizer, build_scheduler, resume_checkpoint, save_checkpoint
 
 
 def tiny_sit() -> SiT:
@@ -52,6 +52,16 @@ def test_sit_checkpoint_roundtrip_and_resume(tmp_path) -> None:
     restored = build_model(cfg); restored_optimizer = build_optimizer(restored, cfg); restored_ema = EMA(restored, 0.9)
     assert resume_checkpoint(str(path), restored, restored_optimizer, restored_ema, torch.device("cpu")) == 5
     assert all(torch.equal(a, b) for a, b in zip(model.parameters(), restored.parameters()))
+
+
+def test_sit_scheduler_roundtrip_and_resume(tmp_path) -> None:
+    cfg = {"data": {"latent_resolution": 16, "num_classes": 1}, "model": {"patch_size": 2, "hidden_size": 48, "depth": 2, "num_heads": 6, "mlp_ratio": 2.0, "cond_drop_prob": 0.0}, "train": {"learning_rate": 1e-3, "min_learning_rate": 1e-4, "warmup_steps": 3, "weight_decay": 0.0, "ema_decay": 0.9}}
+    model = build_model(cfg); optimizer = build_optimizer(model, cfg); scheduler = build_scheduler(optimizer, cfg, 20); ema = EMA(model, 0.9)
+    for _ in range(5): optimizer.step(); scheduler.step()
+    path = tmp_path / "scheduled.pt"; save_checkpoint(path, model, optimizer, ema, cfg, 5, "test", scheduler=scheduler)
+    restored = build_model(cfg); restored_optimizer = build_optimizer(restored, cfg); restored_scheduler = build_scheduler(restored_optimizer, cfg, 20); restored_ema = EMA(restored, 0.9)
+    assert resume_checkpoint(str(path), restored, restored_optimizer, restored_ema, torch.device("cpu"), scheduler=restored_scheduler) == 5
+    assert restored_scheduler.state_dict() == scheduler.state_dict()
 
 
 def test_foreach_ema_updates() -> None:

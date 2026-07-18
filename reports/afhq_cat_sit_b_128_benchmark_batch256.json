@@ -1,0 +1,14 @@
+{
+  "batch": 256,
+  "workers": 4,
+  "warmup_steps": 10,
+  "measured_steps": 30,
+  "synthetic_latents": true,
+  "fused_adamw": true,
+  "foreach_ema": true,
+  "oom": false,
+  "images_per_second": 2030.9800621547631,
+  "ms_per_step": 126.04751999800403,
+  "peak_allocated_gb": 9.273831844329834,
+  "peak_reserved_gb": 9.6953125
+}
