@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 from PIL import Image
 import torch
 
@@ -8,7 +10,9 @@ from mini_diffusion.data import AFHQCatDataset, cat_split_dir
 
 def write_image(path, color) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    Image.new("RGB", (24, 20), color).save(path)
+    image = Image.new("RGB", (48, 40))
+    image.putdata([((color[0] + x * 7) % 256, (color[1] + y * 9) % 256, (color[2] + x * 3 + y * 5) % 256) for y in range(40) for x in range(48)])
+    image.save(path)
 
 
 def test_official_afhq_train_test_split_and_manifest(tmp_path) -> None:
@@ -23,6 +27,8 @@ def test_official_afhq_train_test_split_and_manifest(tmp_path) -> None:
     assert {entry["split"] for entry in manifest} == {"train"}
     assert len({entry["augmentation_seed"] for entry in manifest}) == 4
     assert all(entry["source_path"].startswith("train/cat/") and len(entry["sha256"]) == 64 for entry in manifest)
+    variant_hashes = {hashlib.sha256(dataset[index][0].numpy().tobytes()).hexdigest() for index in range(len(dataset))}
+    assert len(variant_hashes) == 4
 
 
 def test_official_afhq_val_is_test_alias(tmp_path) -> None:

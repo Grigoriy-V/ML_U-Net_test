@@ -77,6 +77,12 @@ def build_scheduler(optimizer: torch.optim.Optimizer, cfg: dict, max_steps: int)
         progress = (step_index - warmup) / max(1, max_steps - warmup)
         return minimum_ratio + (1 - minimum_ratio) * 0.5 * (1 + math.cos(math.pi * min(1.0, progress)))
     return torch.optim.lr_scheduler.LambdaLR(optimizer, multiplier)
+def training_limits(cfg: dict, cli_max_steps: int | None) -> tuple[int, int]:
+    stop_at = int(cli_max_steps if cli_max_steps is not None else cfg["train"]["max_steps"])
+    scheduler_total = int(cfg["train"].get("scheduler_total_steps", cfg["train"]["max_steps"]))
+    if stop_at < 1 or scheduler_total < 1:
+        raise ValueError("stop_at and scheduler_total_steps must be positive")
+    return stop_at, scheduler_total
 def make_loader(cfg: dict, repa_enabled: bool = False) -> tuple[DataLoader, dict]:
     payload = load_cache(Path(cfg["data"]["cache_dir"]) / "train.pt", expected_resolution=cfg["data"]["resolution"], expected_vae_model_id=cfg["vae"]["model_id"])
     class_filter = cfg["data"].get("class_filter")
@@ -196,14 +202,14 @@ def main() -> None:
     if args.overfit_smoke: overfit_smoke(cfg, args.overfit_updates); return
     if cfg.get("train", {}).get("init_from"):
         raise ValueError("init_from is forbidden for this SiT+REPA experiment; train from scratch or resume its own REPA checkpoint")
-    max_steps = args.max_steps or cfg["train"]["max_steps"]; set_seed(cfg.get("seed", 123)); device, dtype, autocast = device_dtype(cfg)
-    torch.backends.cudnn.benchmark = bool(cfg.get("performance", {}).get("cudnn_benchmark", False)); model = build_model(cfg).to(device); projector = build_projector(cfg, device); trainable = nn.ModuleList([model] + ([projector] if projector else [])); optimizer = build_optimizer(trainable, cfg); scheduler = build_scheduler(optimizer, cfg, max_steps); ema = EMA(model, cfg["train"]["ema_decay"], foreach=cfg.get("performance", {}).get("ema_foreach", False)); loader, payload = make_loader(cfg, projector is not None); feature_metadata = getattr(loader.dataset, "metadata", None)
+    max_steps, scheduler_total_steps = training_limits(cfg, args.max_steps); set_seed(cfg.get("seed", 123)); device, dtype, autocast = device_dtype(cfg)
+    torch.backends.cudnn.benchmark = bool(cfg.get("performance", {}).get("cudnn_benchmark", False)); model = build_model(cfg).to(device); projector = build_projector(cfg, device); trainable = nn.ModuleList([model] + ([projector] if projector else [])); optimizer = build_optimizer(trainable, cfg); scheduler = build_scheduler(optimizer, cfg, scheduler_total_steps); ema = EMA(model, cfg["train"]["ema_decay"], foreach=cfg.get("performance", {}).get("ema_foreach", False)); loader, payload = make_loader(cfg, projector is not None); feature_metadata = getattr(loader.dataset, "metadata", None)
     if projector is not None:
         # Open/validate cache in the parent before workers are spawned; workers reopen mmap handles lazily.
         loader.dataset._open_features(); feature_metadata = loader.dataset.metadata
     feature_fp = feature_metadata.get("fingerprint") if feature_metadata else None
     step = resume_checkpoint(args.resume, model, optimizer, ema, device, cache_fingerprint(payload), projector, feature_fp, scheduler) if args.resume else 0
-    params = sum(p.numel() for p in trainable.parameters() if p.requires_grad); accum = cfg["train"].get("grad_accum_steps", 1); print(f"trainable_parameters: {params:,}\nbase_sit_parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}\nprojector_parameters: {sum(p.numel() for p in projector.parameters() if p.requires_grad) if projector else 0:,}\ndevice: {device}\ndtype: {dtype} autocast={autocast}\nbatch_size: {cfg['data']['batch_size']}\neffective_batch_size: {cfg['data']['batch_size'] * accum}\nvae_loaded_for_training: false\ndino_loaded_for_training: false")
+    params = sum(p.numel() for p in trainable.parameters() if p.requires_grad); accum = cfg["train"].get("grad_accum_steps", 1); print(f"trainable_parameters: {params:,}\nbase_sit_parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}\nprojector_parameters: {sum(p.numel() for p in projector.parameters() if p.requires_grad) if projector else 0:,}\ndevice: {device}\ndtype: {dtype} autocast={autocast}\nbatch_size: {cfg['data']['batch_size']}\neffective_batch_size: {cfg['data']['batch_size'] * accum}\nstop_at_step: {max_steps}\nscheduler_total_steps: {scheduler_total_steps}\nvae_loaded_for_training: false\ndino_loaded_for_training: false")
     out = Path(cfg["output_dir"]); writer = SummaryWriter(out / "logs"); batches = infinite(loader); pbar = tqdm(total=max_steps, initial=step, desc=cfg["name"]); latest = out / "checkpoints" / "latest.pt"; model.train()
     while step < max_steps:
         optimizer.zero_grad(set_to_none=True); total = 0.0

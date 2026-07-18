@@ -379,3 +379,17 @@ Added official AFHQ train/test loader support, deterministic four-augmentation t
 ### Decision
 
 Do not start AFHQ training until the official dataset is placed locally. The absent dataset produced the expected clear loader error, so no AFHQ cache, VAE ceiling, smoke train/resume/sample chain, or long run was fabricated. Once data is available, run the documented debug chain, then the bounded 10k command and held-out AFHQ evaluator.
+
+## 2026-07-18: AFHQ Cats Final Pre-10k Preflight
+
+### Goal
+
+Verify scheduler horizon and deterministic augmentation guarantees before the first bounded AFHQ 10k run, without launching data-dependent work while the official dataset is absent.
+
+### Outcome
+
+`--max-steps 10000` now resolves to stop-at `10000` with independent scheduler horizon `100000`. Train augmentation is deterministic `RandomResizedCrop(scale=0.85-1.0, ratio=1.0)` plus horizontal flip, and cache creation records pixel/latent hashes and rejects a source whose four variants are not pixel-unique. Full pytest passed with `37 passed`.
+
+### Decision
+
+The code preflight is complete, but the project is not ready to start the actual 10k run until official AFHQ Cats files are available locally. The next action after dataset placement is cache preparation, which will write the real count report before VAE ceiling, IO benchmark, and train/resume/sample smoke are allowed to proceed.

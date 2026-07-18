@@ -9,6 +9,7 @@ data:
   latent_resolution: 16
   num_classes: 1
   augmentation_variants: 4
+  augmentation_scale: [0.85, 1.0]
   augmentation_seed: 123
   latent_seed: 123
   prepare_batch_size: 8
