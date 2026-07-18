@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "core_repository": "human-in-the-loop-ml-orchestration",
+  "core_commit": "14b7c2597d1a7e6c57a4ac8c15d3767338c0a27d",
+  "core_version": "0.1.0",
+  "adapter_type": "generative_ml",
+  "managed_files": [
+    {"source_path":"AGENTS.md","source_sha256":"5e1f06ea3f4f9f2c1ceab3c8b18f8660221ea3501b384c79e89ec5b6ac8ad5d1","core_path":"AGENTS.md","core_sha256":"64d843bc99e7e1f6591625055a5f3b42fcb30fafef91d5688e4557e14a5d76e1","relationship":"adapted"},
+    {"source_path":".codex/config.toml","source_sha256":"f9024748bc7c6c32ca83a2b72dfe32959644ec26774815583e83f6847a032d55","core_path":".codex/config.toml","core_sha256":"f9024748bc7c6c32ca83a2b72dfe32959644ec26774815583e83f6847a032d55","relationship":"exact_copy"},
+    {"source_path":".codex/agents/luna_clerk.toml","source_sha256":"81767bda04d326c1642e4608b38a11a35a60c8a06d93d337dce8332621923cfa","core_path":".codex/agents/luna_clerk.toml","core_sha256":"a49b7d9c9f9c6958e91761b215e6b85f80aa8b5c673efc732301531075796b51","relationship":"project_override"},
+    {"source_path":".codex/agents/terra_worker.toml","source_sha256":"cc2e3d428a570ffc3c1718828f66d1511755aa0670585726a5042cad683fd29d","core_path":".codex/agents/terra_worker.toml","core_sha256":"441c8cdfe13ea6f875ac56fe1b4afcac53384aed18ae632f4993901a25bc4e60","relationship":"project_override"},
+    {"source_path":".codex/agents/sol_specialist.toml","source_sha256":"3ad36931829936b198104e125c5aa3b1a363fc667057a5d15424acec2509ff83","core_path":".codex/agents/sol_specialist.toml","core_sha256":"78351d34a50fea60364d0b864a24f09292c057aec025f187c367c7bddc68d6d2","relationship":"project_override"},
+    {"source_path":"tools/agent_ledger.py","source_sha256":"99e9aff3be05a8a4b2549d6674b5a70ceeeb42ead47462c2b8407cef5328e578","core_path":"tools/agent_ledger.py","core_sha256":"0269109bc0032026cd78b58d4ac5411455aaefdc8f888f9feb048a833b20be31","relationship":"adapted"},
+    {"source_path":"reports/agent_execution_ledger.schema.json","source_sha256":"91a381b80d92f698315f7fb9727a09a64522b00be012f0e68202c254085d242d","core_path":"reports/agent_execution_ledger.schema.json","core_sha256":"d77284e935ccb187e5d77d0bc78536958644dad6cdba26e400ce1e66a4c5b5c1","relationship":"adapted"},
+    {"source_path":"docs/agent_orchestration.md","source_sha256":"48c40d1172ee20036d9100f1bfa71f6512083cf76c06e00fa4fcdc417e549516","core_path":"docs/agent_orchestration.md","core_sha256":"9e69e0e5a5420e01c3f5d47c4b0df46d57e7cc42fde94fc78975a90e13ba2f87","relationship":"adapted"}
+  ]
+}

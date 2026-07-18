@@ -594,3 +594,39 @@ After the focused rework, the targeted no-ML helper suite completed with `11` te
 ### Decision
 
 Independent re-review accepts the corrected helper with bounded historical ledger-warning limitations only. Windows lock failure leaves an empty ledger byte-identical, terminals require actual evidence and computed positive duration, and reviews require explicit supervisor identity. No ML operation or experiment-ledger event occurred.
+# Project Log
+
+## 2026-07-19 — Core v0.1 generative adapter integration
+
+Pinned portable Core v0.1 metadata and completed no-ML orchestration
+regression. See `reports/orchestration_core_adapter_integration.md`.
+
+## 2026-07-19 — Verifiable Core pin rework
+
+Replaced the descriptive pin with local and optional Core-root hash validation;
+no ML operation or experiment-ledger mutation occurred.
+
+## 2026-07-19 — Pin path-security hardening
+
+Pin validation now rejects linked/reparse source and Core paths before hashing.
+
+## 2026-07-19 — Independent Core adapter integration review
+
+The no-ML source regression passed (11 helper tests, source/public validators,
+and protected-artifact diff), but the Core lock is not cryptographically
+verifiable: its managed-file entries are prose rather than hashes or explicit
+relationships. The review verdict is **changes required**; see
+`reports/orchestration_core_adapter_integration.md`.
+
+## 2026-07-19 — Final Core pin path-security re-review
+
+The containment/reparse repair passed all 15 targeted tests and independent
+external-file, linked-parent, and Core-side link fixtures. The Core source pin
+is accepted; see `reports/orchestration_core_adapter_integration.md`.
+
+## 2026-07-19 — Core pin rework adversarial review
+
+The eight-file lock and its 14 targeted tests passed, but an isolated fixture
+showed that the validator accepts an escaping managed-file symlink when its
+hash matches. The source-pin verdict remains **changes required**; see
+`reports/orchestration_core_adapter_integration.md`.
