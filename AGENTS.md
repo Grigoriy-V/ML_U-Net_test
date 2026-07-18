@@ -35,3 +35,5 @@ Rules:
 - Planned commands must not be recorded as completed.
 - The final response must state which ledger events were appended.
 - This requirement applies to ML experiment operations, not ordinary documentation-only or unrelated code tasks.
+
+- Capture every new event timestamp programmatically from system UTC at write time; agents must never invent, round, backdate, or future-date timestamps. If exact time is unavailable, use a schema-supported null/unknown value or append a correction event; never fabricate a timestamp.
