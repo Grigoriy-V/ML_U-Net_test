@@ -560,3 +560,37 @@ The held-out AFHQ Cats quick-200 protocol (seeds 1000-1199, Heun-50, CFG 1.0) ga
 ### Decision
 
 Supervisor selected raw early-stop 20k as the winner of the current AFHQ Cats comparison and closed the stage on quick-200 evidence. `outputs/afhq_cat_sit_b_128_repa_early_stop/checkpoints/best_raw_0020000.pt` is a SHA-identical frozen copy of `step_0020000.pt`, both `300b5600b86d1a35ebf2c27307e480070cceee113735b23ffca8e46316e57bd0`. It leads the three raw 20k variants on FID/KID, while the frozen baseline remains better on precision/recall; that limitation is retained with the checkpoint. Always-on REPA is excluded. Full-1000 and EMA selection were deliberately skipped, and no training, resume, sampler ablation, or CFG sweep was run for this closeout. Advance to the separately scoped Cats → all-AFHQ transfer experiment without modifying this frozen parent.
+
+## 2026-07-19: Validated Agent-Ledger Helper Milestone
+
+### Outcome
+
+Added the project-local `tools/agent_ledger.py` CLI and its targeted no-ML test suite. The helper performs schema-equivalent validation before an EOF-only locked JSONL append, creates UTC timestamps and IDs itself, enforces new worker lifecycle rules, and reports preserved historical ledger anomalies as warnings. The targeted suite completed with `8` passing tests.
+
+### Decision
+
+Use the helper for every new repository agent-ledger event. No dataset, cache, benchmark, training, sampling, evaluation, checkpoint, or experiment-ledger operation occurred.
+
+### Rework
+
+Corrected the helper's Windows lock ordering, mandatory terminal-evidence handling, and reviewer-identity semantics. The expanded targeted suite verifies empty-ledger lock failure leaves bytes unchanged, incomplete terminal evidence is rejected without mutation, positive duration is computed, and reviews carry explicit supervisor identity. No ML operation occurred.
+
+## 2026-07-19: Independent Agent-Ledger Helper Review
+
+### Validation
+
+Re-ran the targeted no-ML helper suite (`.\.venv\Scripts\python.exe -m unittest tests\test_agent_ledger.py -v`): `Ran 8 tests` and `OK`. Production helper validation passed with three preserved legacy warnings. Draft 2020-12 validation found `0` errors across `83` current agent-ledger events; four TOML files parsed; public evidence verification passed; `.codex` private-state probes were ignored while tracked config/profile probes were not; `git diff --check` passed.
+
+### Decision
+
+Independent review requires changes before accepting the helper milestone: on Windows an empty ledger is modified with a newline before lock acquisition, so a lock failure can violate no-mutation-on-failure. Terminal evidence fields are supported but optional and need stricter CLI-level coverage. No ML operation or experiment-ledger event occurred.
+
+## 2026-07-19: Agent-Ledger Helper Re-review
+
+### Validation
+
+After the focused rework, the targeted no-ML helper suite completed with `11` tests and `OK`; its production-ledger count was unchanged before and after. Production helper validation, Draft 2020-12 schema validation (`0` errors across `90` events), four TOML parses, public evidence verification, `.codex` allowlist probes, and `git diff --check` all passed.
+
+### Decision
+
+Independent re-review accepts the corrected helper with bounded historical ledger-warning limitations only. Windows lock failure leaves an empty ledger byte-identical, terminals require actual evidence and computed positive duration, and reviews require explicit supervisor identity. No ML operation or experiment-ledger event occurred.

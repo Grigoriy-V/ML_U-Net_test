@@ -1,6 +1,10 @@
 .venv/
 .agents/
-.codex/
+# Keep personal agent state private; reproducible project profiles live in .codex.
+.codex/*
+!.codex/config.toml
+!.codex/agents/
+!.codex/agents/*.toml
 __pycache__/
 *.pyc
 .pytest_cache/
