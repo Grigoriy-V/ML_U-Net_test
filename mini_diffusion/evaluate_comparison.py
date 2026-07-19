@@ -6,7 +6,6 @@ import json
 import math
 import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +27,7 @@ from mini_diffusion.evaluate_afhq_cat import (
     write_result,
 )
 from mini_diffusion.evaluator import _batched_features, fid, kid, pixel_diagnostics, precision_recall, sha256
+from tools.experiment_ledger import append_event as append_experiment_event
 
 
 def load_protocol(path: str | Path) -> dict[str, Any]:
@@ -158,16 +158,8 @@ def write_markdown(results: dict[str, Any], output: Path) -> None:
 
 
 def append_ledger(config_path: Path, config_hash: str, output: Path, results: dict[str, Any]) -> str:
-    base_event_id = "afhq-cats-baseline-vs-repa-quick-10k-20k-20260718"
-    ledger = ROOT / "reports" / "experiment_ledger.jsonl"
-    existing_ids = {json.loads(line)["event_id"] for line in ledger.read_text(encoding="utf-8").splitlines() if line}
-    suffix = 1
-    event_id = base_event_id
-    while event_id in existing_ids:
-        suffix += 1
-        event_id = f"{base_event_id}-{suffix}"
-    event = {
-        "schema_version": "1.0", "event_id": event_id, "timestamp_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    metadata = {
+        "schema_version": "1.0",
         "experiment_id": "afhq-cats-baseline-vs-repa", "event_type": "evaluation", "status": "completed",
         "git_commit": results["git_commit"], "config_path": str(config_path).replace("\\", "/"), "config_sha256": config_hash,
         "dataset_fingerprint": results["dataset_fingerprint"], "checkpoint_path": None, "checkpoint_step": None, "checkpoint_sha256": None,
@@ -178,9 +170,7 @@ def append_ledger(config_path: Path, config_hash: str, output: Path, results: di
         "decision": "continue", "decision_reason": "The unified fixed-protocol quick comparison completed; use its matched metrics and paired grids to decide the next experiment phase.",
         "notes": "No training, full-1000 evaluation, sampler ablation, or CFG sweep was run.",
     }
-    with ledger.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(event, sort_keys=True) + "\n")
-    return event_id
+    return append_experiment_event(metadata)["event_id"]
 
 
 def main() -> None:

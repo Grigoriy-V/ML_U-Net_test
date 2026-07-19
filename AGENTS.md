@@ -21,6 +21,8 @@
 - A worker must not change its model or reasoning level, delegate, or broaden scope without supervisor approval. Use one write-heavy worker for overlapping mutable scope; long training and evaluation remain human-gated.
 - Every repository task must append agent-ledger events through `python tools/agent_ledger.py`; never manually apply a patch, insert in place, or otherwise edit JSONL history. Worker `started`, `completed`, `failed`, and `interrupted` events set `supervisor_decision` to `null`; only the supervisor appends a later `reviewed` event. If the helper cannot safely write, stop the task, preserve the error evidence, and report failure rather than bypassing the protection. Personal/private tasks outside this repository must not write this project ledger.
 - Fix agent-ledger validation errors by updating the schema and appending a correction event; never rewrite existing JSONL events. Luna profile invocations record requested reasoning as `none`.
+- Every agent event must be written only through `tools/agent_ledger.py`. Every experiment event must be written only through `tools/experiment_ledger.py` or its importable append API. Never manually append, patch, insert, or otherwise write either JSONL ledger.
+- If either ledger helper fails, stop and preserve the failure evidence; do not bypass the helper. Corrections are new append-only events and never rewrites. The final response must list every agent-ledger and experiment-ledger event ID appended by the task.
 
 ## ML Experiment Logging
 

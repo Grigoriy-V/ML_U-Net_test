@@ -630,3 +630,23 @@ The eight-file lock and its 14 targeted tests passed, but an isolated fixture
 showed that the validator accepts an escaping managed-file symlink when its
 hash matches. The source-pin verdict remains **changes required**; see
 `reports/orchestration_core_adapter_integration.md`.
+## 2026-07-19 — Generative experiment-ledger helper
+
+Added the standard-library `tools/experiment_ledger.py` reference append path
+and routed `mini_diffusion/evaluate_comparison.py` through its importable API.
+The helper preserves all 30 legacy schema-v1 events while enforcing closed
+shape, unique IDs, helper-generated UUIDv4/system UTC, atomic sidecar locking,
+validate-before-append, and fail-closed uncertain-write behavior.
+
+Commands run:
+
+- `python tools/experiment_ledger.py validate`;
+- `python tests/test_agent_ledger.py -v` — 11/11 passed;
+- `python tests/test_experiment_ledger.py -v` — 8/8 passed;
+- `python tests/test_evaluate_comparison_ledger_integration.py -v` — 1/1
+  passed.
+
+The production experiment ledger remained at 30 events with SHA-256
+`f06d29bd3eae2709781dd1031d68717b33fdf71c270dc3c60eb3ba4fec1e7cb6`.
+No ML/data operation or experiment event ran. Decision: hand off dirty for
+supervisor evidence review; see `reports/experiment_ledger_helper.md`.
